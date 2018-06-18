@@ -20,7 +20,7 @@
 #include "common.h"
 
 #ifdef HAVE_SQLITE3
-#	error SQLite is not supported as a main Zabbix database backend.
+#		error SQLite is not supported as a main Zabbix database backend.
 #endif
 
 #include "cfg.h"
