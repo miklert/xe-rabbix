@@ -260,6 +260,7 @@ char	*CONFIG_TLS_PSK_FILE		= NULL;
 char	*CONFIG_SOCKET_PATH		= NULL;
 char	*CONFIG_HISTORY_STORAGE_URL	= NULL;
 char	*CONFIG_HISTORY_STORAGE_OPTS	= NULL;
+char	*CONFIG_HISTORY_STORAGE_TYPE	= NULL;
 
 int	get_process_info_by_thread(int local_server_num, unsigned char *local_process_type, int *local_process_num);
 
@@ -696,6 +697,9 @@ static void	zbx_load_config(ZBX_TASK_EX *task)
 			PARM_OPT,	0,			0},
 		{"HistoryStorageTypes",		&CONFIG_HISTORY_STORAGE_OPTS,		TYPE_STRING_LIST,
 			PARM_OPT,	0,			0},
+		{"HistoryStorageType",		&CONFIG_HISTORY_STORAGE_TYPE,		TYPE_STRING,
+			PARM_OPT,	0,			0},
+
 		{NULL}
 	};
 
