@@ -410,14 +410,18 @@ static void	add_icmpping_item(icmpitem_t **items, int *items_alloc, int *items_c
  ******************************************************************************/
 static void	get_pinger_hosts(icmpitem_t **icmp_items, int *icmp_items_alloc, int *icmp_items_count)
 {
+
 	const char		*__function_name = "get_pinger_hosts";
-	DC_ITEM			items[MAX_PINGER_ITEMS];
+	DC_ITEM		*items;
 	int			i, num, count, interval, size, timeout, rc, errcode = SUCCEED;
 	char			error[MAX_STRING_LEN], *addr = NULL;
 	icmpping_t		icmpping;
 	icmppingsec_type_t	type;
 
 	zabbix_log(LOG_LEVEL_DEBUG, "In %s()", __function_name);
+
+
+	items=zbx_malloc(NULL,sizeof(DC_ITEM)*MAX_POLLER_ITEMS);
 
 	num = DCconfig_get_poller_items(ZBX_POLLER_TYPE_PINGER, items);
 
@@ -457,7 +461,7 @@ static void	get_pinger_hosts(icmpitem_t **icmp_items, int *icmp_items_alloc, int
 	DCconfig_clean_items(items, NULL, num);
 
 	zbx_preprocessor_flush();
-
+	zbx_free(items);
 	zabbix_log(LOG_LEVEL_DEBUG, "End of %s():%d", __function_name, *icmp_items_count);
 }
 

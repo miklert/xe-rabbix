@@ -46,6 +46,7 @@
 
 extern unsigned char	process_type, program_type;
 extern int		server_num, process_num;
+extern char	*CONFIG_TMPDIR;
 
 /******************************************************************************
  *                                                                            *
@@ -430,10 +431,9 @@ static int	get_value(DC_ITEM *item, AGENT_RESULT *result, zbx_vector_ptr_t *add_
  *           see DCconfig_get_poller_items()                                  *
  *                                                                            *
  ******************************************************************************/
-static int	get_values(unsigned char poller_type, int *nextcheck)
+static int	get_values(unsigned char poller_type, int *nextcheck, DC_ITEM *items)
 {
 	const char		*__function_name = "get_values";
-	DC_ITEM			items[MAX_POLLER_ITEMS];
 	AGENT_RESULT		results[MAX_POLLER_ITEMS];
 	int			errcodes[MAX_POLLER_ITEMS];
 	zbx_timespec_t		timespec;
@@ -442,6 +442,8 @@ static int	get_values(unsigned char poller_type, int *nextcheck)
 	zbx_vector_ptr_t	add_results;
 
 	zabbix_log(LOG_LEVEL_DEBUG, "In %s()", __function_name);
+	char		filename[MAX_STRING_LEN], tmp[MAX_STRING_LEN];
+	FILE		*f;
 
 	num = DCconfig_get_poller_items(poller_type, items);
 
@@ -568,7 +570,6 @@ static int	get_values(unsigned char poller_type, int *nextcheck)
 	if (SUCCEED == is_snmp_type(items[0].type))
 	{
 #ifdef HAVE_NETSNMP
-		/* SNMP checks use their own timeouts */
 		get_values_snmp(items, results, errcodes, num);
 #else
 		for (i = 0; i < num; i++)
@@ -733,6 +734,7 @@ ZBX_THREAD_ENTRY(poller_thread, args)
 	double		sec, total_sec = 0.0, old_total_sec = 0.0;
 	time_t		last_stat_time;
 	unsigned char	poller_type;
+	DC_ITEM		*items;
 
 #define	STAT_INTERVAL	5	/* if a process is busy and does not sleep then update status not faster than */
 				/* once in STAT_INTERVAL seconds */
@@ -753,6 +755,9 @@ ZBX_THREAD_ENTRY(poller_thread, args)
 #if defined(HAVE_POLARSSL) || defined(HAVE_GNUTLS) || defined(HAVE_OPENSSL)
 	zbx_tls_init_child();
 #endif
+
+	items=zbx_malloc(NULL,sizeof(DC_ITEM)*MAX_POLLER_ITEMS);
+
 	zbx_setproctitle("%s #%d [connecting to the database]", get_process_type_string(process_type), process_num);
 	last_stat_time = time(NULL);
 
@@ -770,7 +775,7 @@ ZBX_THREAD_ENTRY(poller_thread, args)
 		}
 
 		sec = zbx_time();
-		processed += get_values(poller_type, &nextcheck);
+		processed += get_values(poller_type, &nextcheck,items);
 		total_sec += zbx_time() - sec;
 
 		sleeptime = calculate_sleeptime(nextcheck, POLLER_DELAY);
