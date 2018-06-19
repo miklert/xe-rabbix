@@ -5,4 +5,6 @@ noinst_LIBRARIES = libzbxhistory.a
 libzbxhistory_a_SOURCES = \
 	history.c history.h \
 	history_sql.c \
-	history_elastic.c 
+	history_elastic.c \
+	history_clickhouse.c
+
