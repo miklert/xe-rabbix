@@ -684,10 +684,6 @@ static char	*zbx_snmp_get_octet_string(const struct variable_list *var)
 	{
 		strval_dyn = zbx_strdup(strval_dyn, buffer + 5);
 	}
-	else if (0 == strncmp(buffer, "BITS: ", 6))
-	{
-		strval_dyn = zbx_strdup(strval_dyn, buffer + 6);
-	}
 	else
 	{
 		/* snprint_value() escapes hintless ASCII strings, so */
@@ -1548,6 +1544,12 @@ static void	zbx_snmp_translate(char *oid_translated, const char *oid, size_t max
 	static zbx_mib_norm_t mibs[] =
 	{
 		/* the most popular items first */
+		{LEN_STR("ifDescr"),			".1.3.6.1.2.1.2.2.1.2"},
+		{LEN_STR("ifHCOutUcastPkts"),		".1.3.6.1.2.1.31.1.1.1.11"},
+		{LEN_STR("ifHCInUcastPkts"),		".1.3.6.1.2.1.31.1.1.1.7"},
+		{LEN_STR("ifHCInOctets"),		".1.3.6.1.2.1.31.1.1.1.6"},
+		{LEN_STR("ifHCOutOctets"),		"1.3.6.1.2.1.31.1.1.1.10"},
+
 		{LEN_STR("ifDescr"),		".1.3.6.1.2.1.2.2.1.2"},
 		{LEN_STR("ifInOctets"),		".1.3.6.1.2.1.2.2.1.10"},
 		{LEN_STR("ifOutOctets"),	".1.3.6.1.2.1.2.2.1.16"},
@@ -2056,8 +2058,8 @@ static int	zbx_snmp_process_standard(struct snmp_session *ss, const DC_ITEM *ite
 			errcodes[i] = CONFIG_ERROR;
 			continue;
 		}
-
-		zbx_snmp_translate(oids_translated[i], items[i].snmp_oid, sizeof(oids_translated[i]));
+		if (NULL != items[i].snmp_oid )
+			zbx_snmp_translate(oids_translated[i], items[i].snmp_oid, sizeof(oids_translated[i]));
 	}
 
 	ret = zbx_snmp_get_values(ss, items, oids_translated, results, errcodes, NULL, num, 0, error, max_error_len,
@@ -2077,77 +2079,341 @@ int	get_value_snmp(const DC_ITEM *item, AGENT_RESULT *result)
 	return errcode;
 }
 
+
+
+int async_submit_result (int status, struct snmp_session *sp, struct snmp_pdu *response, AGENT_RESULT *result)
+{
+   const char	*__function_name = "async_submit_result";
+
+
+  struct variable_list *var;
+
+
+  switch (status) {
+	case STAT_SUCCESS:
+		var = response->variables;
+
+		if (response->errstat == SNMP_ERR_NOERROR) 
+		{
+			while (var) 
+			{
+				zabbix_log(LOG_LEVEL_DEBUG, "%s() calling zbx_snmp_set_result ",__function_name);
+				(void)zbx_snmp_set_result(var, result);
+				var = var->next_variable;
+			}
+		} else 
+		{
+			zabbix_log(LOG_LEVEL_DEBUG, "%s() there was an error in SNMP responce from %s",__function_name,sp->peername);
+		}
+		return 1;
+
+	case STAT_TIMEOUT:
+		zabbix_log(LOG_LEVEL_DEBUG, "%s() there was a timeout in SNMP request to %s",__function_name,sp->peername);
+		return 0;
+
+	 case STAT_ERROR:
+		zabbix_log(LOG_LEVEL_DEBUG, "%s() there was an error in SNMP responce from %s",__function_name,sp->peername);
+//		snmp_perror(sp->peername);
+		return 0;
+    }
+    return 0;
+}
+
+
+struct async_snmp_conf{
+    size_t	parsed_oid_lens[MAX_SNMP_ITEMS];
+    char	oids_translated[MAX_SNMP_ITEMS][ITEM_SNMP_OID_LEN_MAX];
+    oid		parsed_oids[MAX_SNMP_ITEMS][MAX_OID_LEN];
+
+    int		*errcodes;
+    AGENT_RESULT *results;		//reference to all the results
+    const DC_ITEM *items;		//reference to items
+    int		active_hosts; /* hosts that we have not completed */
+
+};
+
+struct async_snmp_session {
+	struct snmp_session *sess;		/* SNMP session data */
+	int current_item;		/* Items index  in the items array we've processing */
+	int max_items;		//items count int the items array, to stop iterating
+	struct async_snmp_conf *conf;
+};
+
+/*
+ * SNMP callback  responce handler
+ */
+
+int asynch_response(int operation, struct snmp_session *sp, int reqid,
+		    struct snmp_pdu *pdu, void *magic)
+{
+
+	const char	*__function_name = "async_response";
+
+	struct async_snmp_session *sess = (struct async_snmp_session *)magic;
+	struct async_snmp_conf *conf=sess->conf;
+
+	struct snmp_pdu *req;
+	zbx_uint64_t	prev_hostid;
+
+	if (operation == NETSNMP_CALLBACK_OP_RECEIVED_MESSAGE) {
+
+		if (async_submit_result(STAT_SUCCESS, sess->sess, pdu, &conf->results[sess->current_item])) {
+
+			//if the current item is not last in the list
+			if (sess->current_item < sess->max_items)	
+			{	
+				prev_hostid=conf->items[sess->current_item].host.hostid;
+				sess->current_item++;
+
+				//and next item has the same hostid as the prev one
+				if (conf->items[sess->current_item].host.hostid == prev_hostid ) 
+				{
+					//then sending next oid query
+					if (conf->items[sess->current_item].snmp_oid) {
+
+						zabbix_log(LOG_LEVEL_DEBUG, "In %s() Parsing oids and adding null vals", __function_name);
+						conf->parsed_oid_lens[sess->current_item] = MAX_OID_LEN;
+
+						//oid translation
+						if (NULL != conf->items[sess->current_item].snmp_oid )
+						{
+							zbx_snmp_translate(conf->oids_translated[sess->current_item], conf->items[sess->current_item].snmp_oid,
+								 sizeof(conf->oids_translated[sess->current_item]));
+						}  else {
+							zabbix_log(LOG_LEVEL_DEBUG, "In %s() didn't translated oid due NULL snmp oid for item", __function_name);
+						}
+
+
+						if (NULL == snmp_parse_oid(conf->oids_translated[sess->current_item],
+										conf->parsed_oids[sess->current_item], 
+										&conf->parsed_oid_lens[sess->current_item]))
+						{
+							SET_MSG_RESULT(&conf->results[sess->current_item], 
+								    zbx_dsprintf(NULL, "snmp_parse_oid(): cannot parse OID \"%s\".",conf->oids_translated[sess->current_item]));
+							zabbix_log(LOG_LEVEL_DEBUG, "In %s() cannot parse oid", __function_name);
+							conf->errcodes[sess->current_item] = CONFIG_ERROR;
+							conf->active_hosts--;
+							return 1;
+						}
+						//TODO perhaps we need some sort of zbx_snmp_pdu
+						if (NULL == (req = snmp_pdu_create(SNMP_MSG_GET)))
+						{
+//							zbx_strlcpy(error, "snmp_pdu_create(): cannot create PDU object for item", max_error_len);
+							zabbix_log(LOG_LEVEL_DEBUG, "In %s() Cannot create PDU for item %d ", __function_name,sess->current_item);
+							conf->errcodes[sess->current_item]=FAIL;
+							conf->active_hosts--;
+							return 1;
+						}
+
+
+						if (NULL == snmp_add_null_var(req, conf->parsed_oids[sess->current_item], conf->parsed_oid_lens[sess->current_item]))
+						{
+							SET_MSG_RESULT(&conf->results[sess->current_item], zbx_strdup(NULL, "snmp_add_null_var(): cannot add null variable."));
+							zabbix_log(LOG_LEVEL_DEBUG, "In %s() cannot add null variable", __function_name);
+							snmp_free_pdu(req);
+							conf->active_hosts--;
+							return 1;
+						}
+
+
+						if (snmp_send(sp, req))
+							return 1;
+						else {
+							snmp_perror("snmp_send");
+							snmp_free_pdu(req);
+						}
+					}
+				}
+			}
+		}
+	} else {
+		zabbix_log(LOG_LEVEL_DEBUG, "In %s() SNMP message timed out", __function_name);
+		async_submit_result(STAT_TIMEOUT, sp, pdu,&conf->results[sess->current_item]);
+	}
+  /* something went wrong (or end of variables) 
+   * this host not active any more
+   */
+	conf->active_hosts--;
+	return 1;
+}
+
+
+
+
 void	get_values_snmp(const DC_ITEM *items, AGENT_RESULT *results, int *errcodes, int num)
 {
 	const char		*__function_name = "get_values_snmp";
-
-	struct snmp_session	*ss;
 	char			error[MAX_STRING_LEN];
-	int			i, j, err = SUCCEED, max_succeed = 0, min_fail = MAX_SNMP_ITEMS + 1,
-				bulk = SNMP_BULK_ENABLED;
+	struct snmp_session	*ss [MAX_SNMP_ITEMS];
+	int			i, err = SUCCEED, max_succeed = 0,ret=0;
 
-	zabbix_log(LOG_LEVEL_DEBUG, "In %s() host:'%s' addr:'%s' num:%d",
-			__function_name, items[0].host.host, items[0].interface.addr, num);
+	struct snmp_pdu		*pdus[MAX_SNMP_ITEMS], *response;
 
-	for (j = 0; j < num; j++)	/* locate first supported item to use as a reference */
+	size_t			max_error_len;
+
+//	int status;
+	struct variable_list *var;
+	int snmp_sessions=0;
+	struct async_snmp_session *hs;
+	struct async_snmp_conf *conf;
+
+
+	zbx_uint64_t	last_hostid=0;
+
+
+	zabbix_log(LOG_LEVEL_DEBUG, "In %s() Got  num:%d OIDs to parse",
+			__function_name, num);
+
+
+
+	hs = zbx_malloc(NULL, sizeof(struct async_snmp_session) * MAX_SNMP_ITEMS);
+
+	if (NULL ==  hs) 
+		return;
+	
+	if (NULL==(conf=zbx_malloc(NULL,sizeof(struct async_snmp_conf))))
+		return;
+
+	
+	conf->items=items;
+	conf->results=results;
+	conf->errcodes=errcodes;
+	conf->active_hosts=0;
+
+	zabbix_log(LOG_LEVEL_DEBUG, "In %s() ", __function_name);
+	last_hostid=0;
+
+	for ( i = 0; i < num; i++) 
 	{
-		if (SUCCEED == errcodes[j])
-			break;
-	}
-
-	if (j == num)	/* all items already NOTSUPPORTED (with invalid key, port or SNMP parameters) */
-		goto out;
-
-	if (NULL == (ss = zbx_snmp_open_session(&items[j], error, sizeof(error))))
-	{
-		err = NETWORK_ERROR;
-		goto exit;
-	}
-
-	if (0 != (ZBX_FLAG_DISCOVERY_RULE & items[j].flags) || 0 == strncmp(items[j].snmp_oid, "discovery[", 10))
-	{
-		int	max_vars;
-
-		max_vars = DCconfig_get_suggested_snmp_vars(items[j].interface.interfaceid, &bulk);
-
-		err = zbx_snmp_process_discovery(ss, &items[j], &results[j], &errcodes[j], error, sizeof(error),
-				&max_succeed, &min_fail, max_vars, bulk);
-	}
-	else if (NULL != strchr(items[j].snmp_oid, '['))
-	{
-		(void)DCconfig_get_suggested_snmp_vars(items[j].interface.interfaceid, &bulk);
-
-		err = zbx_snmp_process_dynamic(ss, items + j, results + j, errcodes + j, num - j, error, sizeof(error),
-				&max_succeed, &min_fail, bulk);
-	}
-	else
-	{
-		err = zbx_snmp_process_standard(ss, items + j, results + j, errcodes + j, num - j, error, sizeof(error),
-				&max_succeed, &min_fail);
-	}
-
-	zbx_snmp_close_session(ss);
-exit:
-	if (SUCCEED != err)
-	{
-		zabbix_log(LOG_LEVEL_DEBUG, "getting SNMP values failed: %s", error);
-
-		for (i = j; i < num; i++)
+		//going item by item;
+		if (items[i].host.hostid != last_hostid) 
 		{
-			if (SUCCEED != errcodes[i])
-				continue;
+			last_hostid=items[i].host.hostid;
+			zabbix_log(LOG_LEVEL_DEBUG, "In %s() found new host host id %d", __function_name,last_hostid);
 
-			SET_MSG_RESULT(&results[i], zbx_strdup(NULL, error));
-			errcodes[i] = err;
+			//a new host has been found
+			//starting new session for it:
+			if (NULL == (ss[snmp_sessions]=zbx_snmp_open_session(&items[i], error, sizeof(error))))
+			{
+				err = NETWORK_ERROR;
+				errcodes[i]=FAIL;
+				zabbix_log(LOG_LEVEL_DEBUG, "In %s() Opening snmp sessions: failed to open session for item %d", __function_name,i);
+				continue;
+			} 
+
+			//oid translation
+			if (NULL != items[i].snmp_oid )
+			{
+				zbx_snmp_translate(conf->oids_translated[i], items[i].snmp_oid, sizeof(conf->oids_translated[i]));
+			}  else {
+				zabbix_log(LOG_LEVEL_DEBUG, "In %s() didn't translated oid due NULL snmp oid for item", __function_name);
+			}
+
+			zabbix_log(LOG_LEVEL_DEBUG, "In %s() Opening snmp sessions: created session for item %d, code is %d", __function_name,i,errcodes[i]);
+
+			hs[snmp_sessions].current_item=i;
+			hs[snmp_sessions].max_items=num;
+
+			ss[snmp_sessions]->callback = asynch_response;		/* default callback */
+			ss[snmp_sessions]->callback_magic = &hs[snmp_sessions];
+
+			
+			zabbix_log(LOG_LEVEL_DEBUG, "In %s() Parsing oids and adding null vals", __function_name);
+			conf->parsed_oid_lens[i] = MAX_OID_LEN;
+
+			if (NULL == snmp_parse_oid(conf->oids_translated[i], conf->parsed_oids[i], &conf->parsed_oid_lens[i]))
+			{
+				SET_MSG_RESULT(&results[i], zbx_dsprintf(NULL, "snmp_parse_oid(): cannot parse OID \"%s\".",
+						conf->oids_translated[i]));
+				zabbix_log(LOG_LEVEL_DEBUG, "In %s() cannot parse oid", __function_name);
+				errcodes[i] = CONFIG_ERROR;
+				continue;
+			}
+
+			if (NULL == (pdus[snmp_sessions] = snmp_pdu_create(SNMP_MSG_GET)))
+			{
+				zbx_strlcpy(error, "snmp_pdu_create(): cannot create PDU object for item", max_error_len);
+				zabbix_log(LOG_LEVEL_DEBUG, "In %s() Cannot create PDU for item %d ", __function_name,i);
+				errcodes[i]=FAIL;
+				continue;
+			}
+
+
+			if (NULL == snmp_add_null_var(pdus[snmp_sessions], conf->parsed_oids[i], conf->parsed_oid_lens[i]))
+			{
+				SET_MSG_RESULT(&results[i], zbx_strdup(NULL, "snmp_add_null_var(): cannot add null variable."));
+				zabbix_log(LOG_LEVEL_DEBUG, "In %s() cannot add null variable", __function_name);
+				errcodes[i] = CONFIG_ERROR;
+				
+				snmp_free_pdu(pdus[snmp_sessions]);
+				zbx_snmp_close_session(ss[snmp_sessions]);
+				continue;
+			}
+
+
+			zabbix_log(LOG_LEVEL_DEBUG, "In %s() Sending packet ",__function_name);
+
+			if (snmp_send(ss[snmp_sessions], pdus[snmp_sessions]))
+				conf->active_hosts++;
+			else {
+				snmp_perror("snmp_send");
+
+				snmp_free_pdu(pdus[snmp_sessions]);
+				zbx_snmp_close_session(ss[snmp_sessions]);
+				errcodes[i] = CONFIG_ERROR;
+				continue;
+			}
+
+			snmp_sessions++;
+		    
+		} else {
+			//the next item belogns to the same host as before.
+			//doing nothing
+			zabbix_log(LOG_LEVEL_DEBUG, "%s() Skipping item %d as it belongs to the same host",__function_name,i);
 		}
+
+
+	} //iteration over the items array
+
+	/* loop while any active hosts */
+	 while (conf->active_hosts > 0) {
+		int fds = 0, block = 1;
+		fd_set fdset;
+		struct timeval timeout;
+
+		FD_ZERO(&fdset);
+
+		snmp_select_info(&fds, &fdset, &timeout, &block);
+		fds = select(fds, &fdset, NULL, NULL, block ? NULL : &timeout);
+
+		if (fds < 0) {
+			zabbix_log(LOG_LEVEL_DEBUG, "End of %s() Some shit happened with fds, TODO: handle prperly", __function_name);
+			return;
+		}
+
+		if (fds)
+			snmp_read(&fdset);
+		else
+			snmp_timeout();
+		zabbix_log(LOG_LEVEL_DEBUG, "In %s() : waiting for %d pollers to finish", __function_name, conf->active_hosts);
 	}
-	else if (SNMP_BULK_ENABLED == bulk && (0 != max_succeed || MAX_SNMP_ITEMS + 1 != min_fail))
+
+	/* sessions cleanup */
+	for (i = 0; i < snmp_sessions; i++ ) 
 	{
-		DCconfig_update_interface_snmp_stats(items[j].interface.interfaceid, max_succeed, min_fail);
+		zabbix_log(LOG_LEVEL_DEBUG, "End of %s() freeing session for  item %d", __function_name,i);
+		zbx_snmp_close_session(ss[i]);
 	}
-out:
-	zabbix_log(LOG_LEVEL_DEBUG, "End of %s()", __function_name);
+
+	zbx_free(hs);
+	zbx_free(conf);
+	zabbix_log(LOG_LEVEL_DEBUG, "End of %s():%s", __function_name, zbx_result_string(ret));
+
+	return;
 }
+
+
+
 
 void	zbx_init_snmp(void)
 {
