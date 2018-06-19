@@ -12,6 +12,11 @@
 ## M4sh Initialization. ##
 ## -------------------- ##
 
+##to fix make complains about regenerated m4 files
+touch "10 days ago" m4
+touch "10 days ago" m4/*
+
+
 # Be more Bourne compatible
 DUALCASE=1; export DUALCASE # for MKS sh
 if test -n "${ZSH_VERSION+set}" && (emulate sh) >/dev/null 2>&1; then :
