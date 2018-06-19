@@ -309,6 +309,9 @@ static void	DCitem_nextcheck_update(ZBX_DC_ITEM *item, const ZBX_DC_HOST *host, 
 		return;	/* avoid unnecessary nextcheck updates when syncing items in cache */
 	}
 
+	if (0 != (flags & ZBX_HOST_UNREACHABLE) && 0 != (item->nextcheck = DCget_disable_until(item, host)))
+		return;
+
 	if (0 != host->proxy_hostid && NULL != (proxy = zbx_hashset_search(&config->proxies, &host->proxy_hostid)))
 		now -= proxy->timediff;
 
@@ -7059,6 +7062,11 @@ int	DCconfig_get_poller_items(unsigned char poller_type, DC_ITEM *items)
 		case ZBX_POLLER_TYPE_JAVA:
 			max_items = MAX_JAVA_ITEMS;
 			break;
+
+		case ZBX_POLLER_TYPE_NORMAL:
+			max_items = MAX_SNMP_ITEMS;
+			break;
+
 		case ZBX_POLLER_TYPE_PINGER:
 			max_items = MAX_PINGER_ITEMS;
 			break;
@@ -7086,8 +7094,8 @@ int	DCconfig_get_poller_items(unsigned char poller_type, DC_ITEM *items)
 		{
 			if (SUCCEED == is_snmp_type(dc_item_prev->type))
 			{
-				if (0 != __config_snmp_item_compare(dc_item_prev, dc_item))
-					break;
+				//if (0 != __config_snmp_item_compare(dc_item_prev, dc_item))
+					//break;
 			}
 			else if (ITEM_TYPE_JMX == dc_item_prev->type)
 			{
@@ -7154,7 +7162,7 @@ int	DCconfig_get_poller_items(unsigned char poller_type, DC_ITEM *items)
 			if (ZBX_SNMP_OID_TYPE_NORMAL == snmpitem->snmp_oid_type ||
 					ZBX_SNMP_OID_TYPE_DYNAMIC == snmpitem->snmp_oid_type)
 			{
-				max_items = DCconfig_get_suggested_snmp_vars_nolock(dc_item->interfaceid, NULL);
+//				max_items = DCconfig_get_suggested_snmp_vars_nolock(dc_item->interfaceid, NULL);
 			}
 		}
 	}
@@ -7401,8 +7409,8 @@ static void	dc_requeue_items(const zbx_uint64_t *itemids, const unsigned char *s
 
 		switch (errcodes[i])
 		{
-			case SUCCEED:
 			case NOTSUPPORTED:
+			case SUCCEED:
 			case AGENT_ERROR:
 			case CONFIG_ERROR:
 				dc_item->unreachable = 0;
