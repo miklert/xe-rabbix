@@ -15,6 +15,7 @@
 ##to fix make complains about regenerated m4 files
 touch -d "10 days ago" m4
 touch -d "10 days ago" m4/*
+touch -d "10 days ago" configure.ac
 
 
 # Be more Bourne compatible
