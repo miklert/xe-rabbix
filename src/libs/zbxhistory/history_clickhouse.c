@@ -44,7 +44,7 @@
 #define		ZBX_HISTORY_STORAGE_DOWN	10000 /* Timeout in milliseconds */
 #define		MAX_HISTORY_CLICKHOUSE_FIELDS	5 /* How many fields to parse from clickhouse output */
 
-const char	*value_type_str[] = {"dbl", "str", "log", "uint", "text"};
+//const char	*value_type_str[] = {"dbl", "str", "log", "uint", "text"};
 
 extern char	*CONFIG_HISTORY_STORAGE_URL;
 
