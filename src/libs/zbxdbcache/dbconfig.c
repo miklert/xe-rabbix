@@ -1959,7 +1959,7 @@ static void	DCsync_interfaces(zbx_dbsync_t *sync)
 			if (1 == reset_snmp_stats)
 			{
 				interface->max_snmp_succeed = 0;
-				interface->min_snmp_fail = MAX_SNMP_ITEMS + 1;
+				interface->min_snmp_fail = 129;
 			}
 		}
 
