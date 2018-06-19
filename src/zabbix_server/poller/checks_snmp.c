@@ -2311,6 +2311,7 @@ void	get_values_snmp(const DC_ITEM *items, AGENT_RESULT *results, int *errcodes,
 
 			zabbix_log(LOG_LEVEL_DEBUG, "In %s() Opening snmp sessions: created session for item %d, code is %d", __function_name,i,errcodes[i]);
 
+			hs[snmp_sessions].conf=conf;
 			hs[snmp_sessions].current_item=i;
 			hs[snmp_sessions].max_items=num;
 
