@@ -452,7 +452,9 @@ static struct snmp_session	*zbx_snmp_open_session(const DC_ITEM *item, char *err
 			session.version = SNMP_VERSION_3;
 			break;
 		default:
+			zbx_error("Error for Item id: %d",item->itemid);
 			THIS_SHOULD_NEVER_HAPPEN;
+			return NULL;
 			break;
 	}
 

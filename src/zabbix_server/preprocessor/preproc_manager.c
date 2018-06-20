@@ -1057,7 +1057,9 @@ ZBX_THREAD_ENTRY(preprocessing_manager_thread, args)
 		}
 
 		update_selfmon_counter(ZBX_PROCESS_STATE_IDLE);
+		zabbix_log(LOG_LEVEL_DEBUG, "before ret=");
 		ret = zbx_ipc_service_recv(&service, ZBX_PREPROCESSING_MANAGER_DELAY, &client, &message);
+		zabbix_log(LOG_LEVEL_DEBUG, "After ret=");
 		update_selfmon_counter(ZBX_PROCESS_STATE_BUSY);
 
 		/* handle /etc/resolv.conf update and log rotate less often than once a second */
@@ -1075,23 +1077,32 @@ ZBX_THREAD_ENTRY(preprocessing_manager_thread, args)
 
 		if (NULL != message)
 		{
+			zabbix_log(LOG_LEVEL_DEBUG, "Recieved the message, code is %d",message->code);
 			switch (message->code)
 			{
 				case ZBX_IPC_PREPROCESSOR_WORKER:
+					zabbix_log(LOG_LEVEL_DEBUG, "Calling register worker");
 					preprocessor_register_worker(&manager, client, message);
+					zabbix_log(LOG_LEVEL_DEBUG, "Ended register worker");
 					break;
 
 				case ZBX_IPC_PREPROCESSOR_REQUEST:
+					zabbix_log(LOG_LEVEL_DEBUG, "Calling preprocessor add request");
 					preprocessor_add_request(&manager, message);
+					zabbix_log(LOG_LEVEL_DEBUG, "End of preprocessor add request");
 					break;
 
 				case ZBX_IPC_PREPROCESSOR_RESULT:
+					zabbix_log(LOG_LEVEL_DEBUG, "Calling preprocessor add result");
 					preprocessor_add_result(&manager, client, message);
+					zabbix_log(LOG_LEVEL_DEBUG, "End of preprocessor add result");
 					break;
 
 				case ZBX_IPC_PREPROCESSOR_QUEUE:
+					zabbix_log(LOG_LEVEL_DEBUG, "Calling zbx_ipc_client_send");
 					zbx_ipc_client_send(client, message->code, (unsigned char *)&manager.queued_num,
 							sizeof(zbx_uint64_t));
+					zabbix_log(LOG_LEVEL_DEBUG, "End of zbx_ipc_client_send");
 					break;
 			}
 
