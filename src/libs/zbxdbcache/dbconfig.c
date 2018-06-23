@@ -7122,29 +7122,28 @@ int	DCconfig_get_poller_items(unsigned char poller_type, DC_ITEM *items)
 			continue;
 		}
 
-		if (0 == (disable_until = DCget_disable_until(dc_item, dc_host)))
-		{
+//		if (0 == (disable_until = DCget_disable_until(dc_item, dc_host)))
+//		{
 			/* move reachable items on reachable hosts to normal pollers */
-			if (ZBX_POLLER_TYPE_UNREACHABLE == poller_type && 0 == dc_item->unreachable)
-			{
-				dc_requeue_item(dc_item, dc_host, dc_item->state, ZBX_ITEM_COLLECTED, now);
-				continue;
-			}
-		}
-		else
-		{
+//			if (ZBX_POLLER_TYPE_UNREACHABLE == poller_type && 0 == dc_item->unreachable)
+//			{
+//				dc_requeue_item(dc_item, dc_host, dc_item->state, ZBX_ITEM_COLLECTED, now);
+//				continue;
+//			}
+//		}
+//		else
+//		{
 			/* move items on unreachable hosts to unreachable pollers or postpone checks on hosts that */
 			/* have been checked recently and are still unreachable */
-			if (ZBX_POLLER_TYPE_NORMAL == poller_type || ZBX_POLLER_TYPE_JAVA == poller_type ||
-					disable_until > now)
-			{
-				dc_requeue_item(dc_item, dc_host, dc_item->state,
-						ZBX_ITEM_COLLECTED | ZBX_HOST_UNREACHABLE, now);
-				continue;
-			}
-
-			DCincrease_disable_until(dc_item, dc_host, now);
-		}
+//			if (ZBX_POLLER_TYPE_NORMAL == poller_type || ZBX_POLLER_TYPE_JAVA == poller_type ||
+//					disable_until > now)
+//			{
+//				dc_requeue_item(dc_item, dc_host, dc_item->state,
+//						ZBX_ITEM_COLLECTED | ZBX_HOST_UNREACHABLE, now);
+//				continue;
+//			}
+			//DCincrease_disable_until(dc_item, dc_host, now);
+//		}
 
 		dc_item_prev = dc_item;
 		dc_item->location = ZBX_LOC_POLLER;
