@@ -131,7 +131,7 @@ ZBX_THREAD_ENTRY(preprocessing_worker_thread, args)
 	}
 
 	ppid = getppid();
-	zbx_ipc_socket_write(&socket, ZBX_IPC_PREPROCESSOR, (unsigned char *)&ppid, sizeof(ppid));
+	zbx_ipc_socket_write(&socket, ZBX_IPC_PREPROCESSOR_WORKER, (unsigned char *)&ppid, sizeof(ppid));
 
 	zabbix_log(LOG_LEVEL_INFORMATION, "%s #%d started [%s #%d]", get_program_type_string(program_type),
 			server_num, get_process_type_string(process_type), process_num);
