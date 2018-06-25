@@ -2320,6 +2320,10 @@ void	get_values_snmp(const DC_ITEM *items, AGENT_RESULT *results, int *errcodes,
 			ss[snmp_sessions]->callback = asynch_response;		/* default callback */
 			ss[snmp_sessions]->callback_magic = &hs[snmp_sessions];
 
+			ss[snmp_sessions]->retries=2;
+			ss[snmp_sessions]->timeout=1000*1000;
+
+
 			
 			zabbix_log(LOG_LEVEL_DEBUG, "In %s() Parsing oids and adding null vals", __function_name);
 			conf->parsed_oid_lens[i] = MAX_OID_LEN;
