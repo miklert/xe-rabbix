@@ -36,6 +36,8 @@ extern unsigned char	process_type, program_type;
 extern int		server_num, process_num, CONFIG_PREPROCESSOR_FORKS;
 
 #define ZBX_PREPROCESSING_MANAGER_DELAY	1
+#define ZBX_PREPROCESSING_MAX_QUEUE_TRESHOLD 10000
+
 
 #define ZBX_PREPROC_PRIORITY_NONE	0
 #define ZBX_PREPROC_PRIORITY_FIRST	1
@@ -1003,7 +1005,8 @@ static void	preprocessor_destroy_manager(zbx_preprocessing_manager_t *manager)
 
 ZBX_THREAD_ENTRY(preprocessing_manager_thread, args)
 {
-	zbx_ipc_service_t		service;
+	zbx_ipc_service_t		service_requests;
+	zbx_ipc_service_t		service_results;
 	char				*error = NULL;
 	zbx_ipc_client_t		*client;
 	zbx_ipc_message_t		*message;
@@ -1023,12 +1026,20 @@ ZBX_THREAD_ENTRY(preprocessing_manager_thread, args)
 	zabbix_log(LOG_LEVEL_INFORMATION, "%s #%d started [%s #%d]", get_program_type_string(program_type),
 			server_num, get_process_type_string(process_type), process_num);
 
-	if (FAIL == zbx_ipc_service_start(&service, ZBX_IPC_SERVICE_PREPROCESSING, &error))
+	if (FAIL == zbx_ipc_service_start(&service_requests, ZBX_IPC_SERVICE_PREPROCESSING, &error))
+	{
+		zabbix_log(LOG_LEVEL_CRIT, "cannot start preprocessing service for requests: %s", error);
+		zbx_free(error);
+		exit(EXIT_FAILURE);
+	}
+
+	if (FAIL == zbx_ipc_service_start(&service_results, ZBX_IPC_SERVICE_PREPROCESSING_WORKER, &error))
 	{
 		zabbix_log(LOG_LEVEL_CRIT, "cannot start preprocessing service: %s", error);
 		zbx_free(error);
 		exit(EXIT_FAILURE);
 	}
+
 
 	preprocessor_init_manager(&manager);
 
@@ -1057,9 +1068,18 @@ ZBX_THREAD_ENTRY(preprocessing_manager_thread, args)
 		}
 
 		update_selfmon_counter(ZBX_PROCESS_STATE_IDLE);
-		zabbix_log(LOG_LEVEL_DEBUG, "before ret=");
-		ret = zbx_ipc_service_recv(&service, ZBX_PREPROCESSING_MANAGER_DELAY, &client, &message);
-		zabbix_log(LOG_LEVEL_DEBUG, "After ret=");
+
+		ret = zbx_ipc_service_recv(&service_results, ZBX_PREPROCESSING_MANAGER_DELAY, &client, &message);
+
+		//we only do requests processing if queue is small and no other messages to process
+		if (manager.preproc_num < ZBX_PREPROCESSING_MAX_QUEUE_TRESHOLD && NULL==message ) {
+			ret = zbx_ipc_service_recv(&service_requests, ZBX_PREPROCESSING_MANAGER_DELAY, &client, &message);
+		} else {
+		//queue is big - send some tasks to workers
+			preprocessor_assign_tasks(&manager);
+			preprocessing_flush_queue(&manager);
+		}
+
 		update_selfmon_counter(ZBX_PROCESS_STATE_BUSY);
 
 		/* handle /etc/resolv.conf update and log rotate less often than once a second */
@@ -1119,7 +1139,8 @@ ZBX_THREAD_ENTRY(preprocessing_manager_thread, args)
 		}
 	}
 
-	zbx_ipc_service_close(&service);
+	zbx_ipc_service_close(&service_requests);
+	zbx_ipc_service_close(&service_results);
 	preprocessor_destroy_manager(&manager);
 
 	return 0;
