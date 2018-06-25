@@ -247,7 +247,7 @@ static int	process_ping(ZBX_FPING_HOST *hosts, int hosts_count, int count, int i
 
 	fclose(f);
 
-	zabbix_log(LOG_LEVEL_DEBUG, "%s", tmp);
+	zabbix_log(LOG_LEVEL_DEBUG, "Launch command line is:  %s", tmp);
 
 	if (1==count) {
     
