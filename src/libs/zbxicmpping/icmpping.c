@@ -247,12 +247,12 @@ static int	process_ping(ZBX_FPING_HOST *hosts, int hosts_count, int count, int i
 
 	fclose(f);
 
-	zabbix_log(LOG_LEVEL_DEBUG, "Launch command line is:  %s", tmp);
+//	zabbix_log(LOG_LEVEL_DEBUG, "Launch command line is:  %s", tmp);
 
-	if (5==count) {
+	if (1) {
 		//todo: fix to support config file options +
 		//warning message in ipv6 or just delete the code for ipv6    
-		zbx_snprintf(nmap_tmp, sizeof(nmap_tmp), "%s %s 2>&1 <%s", "/usr/bin/nmap", "-sP -T5 -iL", filename);
+		zbx_snprintf(nmap_tmp, sizeof(nmap_tmp), "%s %s  %s ", "/usr/bin/nmap", "-sP -T5 -iL", filename);
 		zabbix_log(LOG_LEVEL_DEBUG, "will do %s", nmap_tmp);
 
 		//if count set to one, then we'll use nmap as the utility
@@ -287,6 +287,8 @@ static int	process_ping(ZBX_FPING_HOST *hosts, int hosts_count, int count, int i
 			return ret;
 		}
 
+
+	//	memset(tmp,0,sizeof(char)*
 		if (NULL == fgets(tmp, sizeof(tmp), f))
 			return ret;
 		
@@ -295,6 +297,11 @@ static int	process_ping(ZBX_FPING_HOST *hosts, int hosts_count, int count, int i
 			zbx_rtrim(tmp, "\n");
 			zabbix_log(LOG_LEVEL_DEBUG, "read line [%s]", tmp);
 
+			if (25> strnlen(tmp,MAX_STRING_LEN) ) {
+				zabbix_log(LOG_LEVEL_DEBUG, "skipping too short line");
+				continue;
+			} 
+			
 
 			char *fields[MAX_ICMP_NMAP_FIELDS];
 			char *end_field;
@@ -310,18 +317,24 @@ static int	process_ping(ZBX_FPING_HOST *hosts, int hosts_count, int count, int i
 
 			while (field_ptr != NULL && MAX_ICMP_NMAP_FIELDS>field_count) 
 			{	
-
+				zabbix_log(LOG_LEVEL_DEBUG, "read field %d [%s]",field_count, field_ptr);
 			    fields[field_count++]=field_ptr;
 			    field_ptr = strtok_r(NULL, " ", &end_field);
 			}
 
-			if (NULL == fields[4])
-				 continue; 
+			if (NULL == fields[4]) {
+				zabbix_log(LOG_LEVEL_DEBUG, "String 1 not enough fields ");
+				 continue;
+			 
+			}
 			//we've got at least 5 fields, checking if this line starts from Nmap ..
 			if ( 	strcmp("Nmap",fields[0]) != 0 ||
 				strcmp("scan",fields[1]) !=0  ||
-				strcmp("for", fields[2]) !=0 )   continue;
-
+				strcmp("report", fields[2]) !=0 )  
+			{  
+				zabbix_log(LOG_LEVEL_DEBUG, "String doesn't match 'Nmap scan for', skipping");
+				continue;
+			}
 
 			host = NULL;
 			//looking for the first space
@@ -330,47 +343,70 @@ static int	process_ping(ZBX_FPING_HOST *hosts, int hosts_count, int count, int i
 				if (0 == strcmp(fields[4], hosts[i].addr))
 				{
 					host = &hosts[i];
+					zabbix_log(LOG_LEVEL_DEBUG, " Host has been found %s", fields[4]);
 					break;
 				}
 			}
 
-			if (NULL == host)
+			if (NULL == host) {
+				zabbix_log(LOG_LEVEL_DEBUG, " Host hasn't been found in the request");
 				continue;
+			} else {
+				zabbix_log(LOG_LEVEL_DEBUG, " Host has been found %s", fields[4]);
+			}
+
+			if (NULL == fgets(tmp, sizeof(tmp), f)) {
+				zabbix_log(LOG_LEVEL_DEBUG, "Couldn't read second line");
+				continue;
+			}
+
+			zabbix_log(LOG_LEVEL_DEBUG, "read line [%s]", tmp);
+			zbx_rtrim(tmp, "\n");
 
 			//got the host, reading and splitting the next line 
 			char *latency;
-			if (NULL == fgets(tmp, sizeof(tmp), f)) 
-				continue;
-				
+		
 			field_ptr = strtok_r(tmp, " ", &end_field);
 				
 			for (i = 0; i++; i<field_count)
 				fields[i]=NULL;
 
+			field_count=0;
+
 			while (field_ptr != NULL && MAX_ICMP_NMAP_FIELDS>field_count) 
 			{	
+				zabbix_log(LOG_LEVEL_DEBUG, "String 2 doesn't parced field %s",field_ptr);
 				fields[field_count++]=field_ptr;
 				field_ptr = strtok_r(NULL, " ", &end_field);
 			}
 
-			if (NULL == fields[3])
-				 continue; 
+			if (NULL == fields[3]) {
+				zabbix_log(LOG_LEVEL_DEBUG, "String too short");
+				continue;
+			}
 
 			//we've got at least 5 fields, checking if this line starts from Nmap ..
 			if ( 	strcmp("Host",	fields[0]) != 0 ||
 				strcmp("is",	fields[1]) !=0  ||
-				strcmp("up",	fields[2]) !=0 )   
+				strcmp("up",	fields[2]) !=0 ) 
+			{
+								zabbix_log(LOG_LEVEL_DEBUG, "String 2 doesn't match 'Nmap scan for', skipping");  
 				continue;
+			}
 
 			latency=fields[3]+1;
 			zbx_rtrim(latency,"s");
 				
 			sec=atof(latency);
 			host->rcv=1;
+			host->cnt=1;
 			host->min=sec;
 			host->max=sec;
 			host->sum=sec;
+
 			zabbix_log(LOG_LEVEL_DEBUG, "Final parced info is host=%s , latency=%f",host->addr,sec);
+
+			ret = SUCCEED;
 		}
 		while (NULL != fgets(tmp, sizeof(tmp), f));
 
