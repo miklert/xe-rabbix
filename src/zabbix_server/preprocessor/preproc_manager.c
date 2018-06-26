@@ -1068,7 +1068,7 @@ ZBX_THREAD_ENTRY(preprocessing_manager_thread, args)
 		}
 
 		update_selfmon_counter(ZBX_PROCESS_STATE_IDLE);
-		ret = zbx_ipc_service_recv(&service_results, ZBX_PREPROCESSING_MANAGER_DELAY, &client, &message);
+//		ret = zbx_ipc_service_recv(&service_results, ZBX_PREPROCESSING_MANAGER_DELAY, &client, &message);
 
 
 		if (manager.queued_num > ZBX_PREPROCESSING_MAX_QUEUE_TRESHOLD ) {
@@ -1076,18 +1076,9 @@ ZBX_THREAD_ENTRY(preprocessing_manager_thread, args)
 			preprocessor_assign_tasks(&manager);
 			preprocessing_flush_queue(&manager);
 		} else {
-			ret = zbx_ipc_service_recv(&service_requests, 1, &client, &message);
+			ret = zbx_ipc_service_recv(&service_requests, 0, &client, &message);
 			if (NULL==message)
 				ret = zbx_ipc_service_recv(&service_results, ZBX_PREPROCESSING_MANAGER_DELAY, &client, &message);
-		}
-
-		//we only do requests processing if queue is small and no other messages to process
-		if (manager.preproc_num < ZBX_PREPROCESSING_MAX_QUEUE_TRESHOLD && NULL==message ) {
-			ret = zbx_ipc_service_recv(&service_requests, ZBX_PREPROCESSING_MANAGER_DELAY, &client, &message);
-		} else {
-		//queue is big - send some tasks to workers
-			preprocessor_assign_tasks(&manager);
-			preprocessing_flush_queue(&manager);
 		}
 
 		update_selfmon_counter(ZBX_PROCESS_STATE_BUSY);
