@@ -1077,7 +1077,7 @@ ZBX_THREAD_ENTRY(preprocessing_manager_thread, args)
 			preprocessing_flush_queue(&manager);
 		} else {
 			ret = zbx_ipc_service_recv(&service_requests, 1, &client, &message);
-			if (NULL==message)..
+			if (NULL==message)
 				ret = zbx_ipc_service_recv(&service_results, ZBX_PREPROCESSING_MANAGER_DELAY, &client, &message);
 		}
 
