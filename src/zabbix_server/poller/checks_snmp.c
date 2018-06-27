@@ -1551,7 +1551,7 @@ static void	zbx_snmp_translate(char *oid_translated, const char *oid, size_t max
 		{LEN_STR("ifHCInUcastPkts"),		".1.3.6.1.2.1.31.1.1.1.7"},
 		{LEN_STR("ifHCInOctets"),		".1.3.6.1.2.1.31.1.1.1.6"},
 		{LEN_STR("ifHCOutOctets"),		"1.3.6.1.2.1.31.1.1.1.10"},
-
+		{LEN_STR("rmon.19.2.0"),		".1.3.6.1.2.1.16.19.2.0"},
 		{LEN_STR("ifDescr"),		".1.3.6.1.2.1.2.2.1.2"},
 		{LEN_STR("ifInOctets"),		".1.3.6.1.2.1.2.2.1.10"},
 		{LEN_STR("ifOutOctets"),	".1.3.6.1.2.1.2.2.1.16"},
