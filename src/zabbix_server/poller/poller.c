@@ -445,6 +445,7 @@ static int	get_values(unsigned char poller_type, int *nextcheck, DC_ITEM *items)
 	char		filename[MAX_STRING_LEN], tmp[MAX_STRING_LEN];
 	FILE		*f;
 
+
 	num = DCconfig_get_poller_items(poller_type, items);
 
 	if (0 == num)
@@ -566,36 +567,51 @@ static int	get_values(unsigned char poller_type, int *nextcheck, DC_ITEM *items)
 
 	zbx_vector_ptr_create(&add_results);
 
-	/* retrieve item values */
-	if (SUCCEED == is_snmp_type(items[0].type))
-	{
+	/* 
+		Huston, we'got a problem here - all the checks 
+		of all items come in a mix (i've realized this)
+		in 'normal' zabbix version all items where guarantied to 
+		come of the same type, 
+		but this one is not  'normal'
+	*/
+
 #ifdef HAVE_NETSNMP
-		get_values_snmp(items, results, errcodes, num);
+	//this will now ignore all non-snmp items, but will request rest in a bulk manner
+	zabbix_log(LOG_LEVEL_DEBUG, "In %s() calling get_values_snmp", __function_name);
+
+	get_values_snmp(items, results, errcodes, num);
+
+	zabbix_log(LOG_LEVEL_DEBUG, "In %s() after get_values_snmp", __function_name);
+
 #else
 		for (i = 0; i < num; i++)
-		{
-			if (SUCCEED != errcodes[i])
-				continue;
+		{	if (SUCCEED == is_snmp_type(items[i].type) {
+					if (SUCCEED != errcodes[i])
+						continue;
 
-			SET_MSG_RESULT(&results[i], zbx_strdup(NULL, "Support for SNMP checks was not compiled in."));
-			errcodes[i] = CONFIG_ERROR;
+					SET_MSG_RESULT(&results[i], zbx_strdup(NULL, "Support for SNMP checks was not compiled in."));
+					errcodes[i] = CONFIG_ERROR;
+			}
 		}
 #endif
-	}
-	else if (ITEM_TYPE_JMX == items[0].type)
-	{
-		zbx_alarm_on(CONFIG_TIMEOUT);
-		get_values_java(ZBX_JAVA_GATEWAY_REQUEST_JMX, items, results, errcodes, num);
-		zbx_alarm_off();
-	}
-	else if (1 == num)
-	{
-		if (SUCCEED == errcodes[0])
-			errcodes[0] = get_value(&items[0], &results[0], &add_results);
-	}
-	else
-		THIS_SHOULD_NEVER_HAPPEN;
-
+//	}
+	for (i = 0; i < num; i++) {
+		if (ITEM_TYPE_JMX == items[i].type)
+		{
+			zbx_alarm_on(CONFIG_TIMEOUT);
+			get_values_java(ZBX_JAVA_GATEWAY_REQUEST_JMX, items, results, errcodes, num);
+			zbx_alarm_off();
+		}
+		else if (SUCCEED != is_snmp_type(items[i].type)) 
+		{
+			if (SUCCEED == errcodes[i])
+				errcodes[i] = get_value(&items[i], &results[i], &add_results);
+		}
+//		else {
+//			zbx_error("unknown items[i] type: %d", items[i].type);
+//			THIS_SHOULD_NEVER_HAPPEN;
+//		}
+    }
 	zbx_timespec(&timespec);
 
 	/* process item values */

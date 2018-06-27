@@ -7070,6 +7070,7 @@ int	DCconfig_get_poller_items(unsigned char poller_type, DC_ITEM *items)
 		case ZBX_POLLER_TYPE_PINGER:
 			max_items = MAX_PINGER_ITEMS;
 			break;
+
 		default:
 			max_items = 1;
 	}
@@ -7087,6 +7088,7 @@ int	DCconfig_get_poller_items(unsigned char poller_type, DC_ITEM *items)
 		min = zbx_binary_heap_find_min(queue);
 		dc_item = (ZBX_DC_ITEM *)min->data;
 
+
 		if (dc_item->nextcheck > now)
 			break;
 
@@ -7103,35 +7105,33 @@ int	DCconfig_get_poller_items(unsigned char poller_type, DC_ITEM *items)
 					break;
 			}
 		}
-
 		zbx_binary_heap_remove_min(queue);
 		dc_item->location = ZBX_LOC_NOWHERE;
 
 		if (0 == config->config->refresh_unsupported && ITEM_STATE_NOTSUPPORTED == dc_item->state)
 			continue;
 
+
 		if (NULL == (dc_host = zbx_hashset_search(&config->hosts, &dc_item->hostid)))
 			continue;
 
 		if (HOST_STATUS_MONITORED != dc_host->status)
 			continue;
-
 		if (SUCCEED == DCin_maintenance_without_data_collection(dc_host, dc_item))
 		{
 			dc_requeue_item(dc_item, dc_host, dc_item->state, ZBX_ITEM_COLLECTED, now);
 			continue;
 		}
-
-		if (0 == (disable_until = DCget_disable_until(dc_item, dc_host)))
-		{
+		if (0 != (disable_until = DCget_disable_until(dc_item, dc_host)))
+		//{
 			/* move reachable items on reachable hosts to normal pollers */
-			if (ZBX_POLLER_TYPE_UNREACHABLE == poller_type && 0 == dc_item->unreachable)
-			{
-				dc_requeue_item(dc_item, dc_host, dc_item->state, ZBX_ITEM_COLLECTED, now);
-				continue;
-			}
-		}
-		else
+			//if (ZBX_POLLER_TYPE_UNREACHABLE == poller_type && 0 == dc_item->unreachable)
+			//{
+			//	dc_requeue_item(dc_item, dc_host, dc_item->state, ZBX_ITEM_COLLECTED, now);
+			//	continue;
+			//}
+		//}
+		//else
 		{
 			/* move items on unreachable hosts to unreachable pollers or postpone checks on hosts that */
 			/* have been checked recently and are still unreachable */
@@ -7144,6 +7144,7 @@ int	DCconfig_get_poller_items(unsigned char poller_type, DC_ITEM *items)
 			}
 			DCincrease_disable_until(dc_item, dc_host, now);
 		}
+
 
 		dc_item_prev = dc_item;
 		dc_item->location = ZBX_LOC_POLLER;

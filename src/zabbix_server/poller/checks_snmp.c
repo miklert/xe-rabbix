@@ -2160,13 +2160,24 @@ int asynch_response(int operation, struct snmp_session *sp, int reqid,
 	if (operation == NETSNMP_CALLBACK_OP_RECEIVED_MESSAGE) {
 
 		if (async_submit_result(STAT_SUCCESS, sess->sess, pdu, &conf->results[sess->current_item])) {
-
-			//if the current item is not last in the list
-			if (sess->current_item < sess->max_items)	
-			{	
-				prev_hostid=conf->items[sess->current_item].host.hostid;
+			
+			prev_hostid=conf->items[sess->current_item].host.hostid;
+			
+			//iterating to next snmp item in the list
+			//skipping any non-snmp type
+			sess->current_item++;
+			while (sess->current_item < sess->max_items ) {
+				if  (SUCCEED == is_snmp_type(conf->items[sess->current_item].type)) {
+					zabbix_log(LOG_LEVEL_DEBUG, "In %s() found snmp item",__function_name);
+					break;
+				}
 				sess->current_item++;
+				zabbix_log(LOG_LEVEL_DEBUG, "In %s() skipping non-snmp item",__function_name);
+			}
 
+			//checking if we're still in list 	
+			if(sess->current_item < sess->max_items) {
+				
 				//and next item has the same hostid as the prev one
 				if (conf->items[sess->current_item].host.hostid == prev_hostid ) 
 				{
@@ -2287,6 +2298,10 @@ void	get_values_snmp(const DC_ITEM *items, AGENT_RESULT *results, int *errcodes,
 
 	for ( i = 0; i < num; i++) 
 	{
+		if (SUCCEED!=is_snmp_type(items[i].type)) {
+			zabbix_log(LOG_LEVEL_DEBUG, "In %s(): skipping non-snmp item ");
+			continue;	
+		}
 		//going item by item;
 		if (items[i].host.hostid != last_hostid) 
 		{

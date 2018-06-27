@@ -252,8 +252,18 @@ static int	process_ping(ZBX_FPING_HOST *hosts, int hosts_count, int count, int i
 	if (1) {
 		//todo: fix to support config file options +
 		//warning message in ipv6 or just delete the code for ipv6    
-		zbx_snprintf(nmap_tmp, sizeof(nmap_tmp), "%s %s  %s ", "/usr/bin/nmap", "-sP -T5 -iL", filename);
+		zbx_snprintf(nmap_tmp, sizeof(nmap_tmp), "%s %s  %s 2>&1", "/usr/bin/nmap", "-sP -T5 -iL", filename);
 		zabbix_log(LOG_LEVEL_DEBUG, "will do %s", nmap_tmp);
+
+		for (i = 0; i < hosts_count; i++)
+		{
+			hosts[i]->rcv=0;
+			hosts[i]->cnt=0;
+			hosts[i]->min=0;
+			hosts[i]->max=0;
+			hosts[i]->sum=0;
+		}
+
 
 		//if count set to one, then we'll use nmap as the utility
 		//its way faster
