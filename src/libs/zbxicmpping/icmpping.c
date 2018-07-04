@@ -257,11 +257,11 @@ static int	process_ping(ZBX_FPING_HOST *hosts, int hosts_count, int count, int i
 
 		for (i = 0; i < hosts_count; i++)
 		{
-			hosts[i]->rcv=0;
-			hosts[i]->cnt=0;
-			hosts[i]->min=0;
-			hosts[i]->max=0;
-			hosts[i]->sum=0;
+			hosts[i].rcv=0;
+			hosts[i].cnt=count;
+		//	hosts[i]->min=0;
+		//	hosts[i]->max=0;
+		//	hosts[i]->sum=0;
 		}
 
 
@@ -408,11 +408,11 @@ static int	process_ping(ZBX_FPING_HOST *hosts, int hosts_count, int count, int i
 			zbx_rtrim(latency,"s");
 				
 			sec=atof(latency);
-			host->rcv=1;
-			host->cnt=1;
+			host->rcv=count;
+//			host->cnt+=count;
 			host->min=sec;
 			host->max=sec;
-			host->sum=sec;
+			host->sum=sec*count;
 
 			zabbix_log(LOG_LEVEL_DEBUG, "Final parced info is host=%s , latency=%f",host->addr,sec);
 
