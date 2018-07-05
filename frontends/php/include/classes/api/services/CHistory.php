@@ -263,7 +263,13 @@ class CHistory extends CApiService {
 		];
 
 
-	
+		$value_col='value';
+
+		if ($options['history']==ITEM_VALUE_TYPE_FLOAT) {
+		    $value_col='value_dbl';
+		}
+
+
 		$table_name = 'zabbix.history_buffer';
 
 		$sql_parts['from']['history'] = $table_name.' h';
