@@ -252,75 +252,114 @@ class CHistory extends CApiService {
 	 * @see CHistory::get
 	 */
 	private function getFromElasticsearch($options) {
-		$query = [];
+		$result = [];
+		$sql_parts = [
+			'select'	=> ['history' => 'h.itemid'],
+			'from'		=> [],
+			'where'		=> [],
+			'group'		=> [],
+			'order'		=> [],
+			'limit'		=> null
+		];
 
-		if (!$table_name = CHistoryManager::getTableName($options['history'])) {
-			$table_name = 'history';
+
+		$value_col='value';
+
+		if ($options['history']==ITEM_VALUE_TYPE_FLOAT) {
+		    $value_col='value_dbl';
 		}
 
-		$schema = DB::getSchema($table_name);
+
+		$table_name = 'zabbix.history_buffer';
+
+		$sql_parts['from']['history'] = $table_name.' h';
 
 		// itemids
 		if ($options['itemids'] !== null) {
-			$query['query']['bool']['must'][] = [
-				'terms' => [
-					'itemid' => array_values($options['itemids'])
-				]
-			];
+			$sql_parts['where']['itemid'] = "h.itemid =". $options['itemids'][0];
 		}
 
 		// time_from
 		if ($options['time_from'] !== null) {
-			$query['query']['bool']['must'][] = [
-				'range' => [
-					'clock' => [
-						'gte' => $options['time_from']
-					]
-				]
-			];
+			$sql_parts['where']['clock_from'] = 'h.clock>='.zbx_dbstr($options['time_from']);
 		}
 
 		// time_till
 		if ($options['time_till'] !== null) {
-			$query['query']['bool']['must'][] = [
-				'range' => [
-					'clock' => [
-						'lte' => $options['time_till']
-					]
-				]
-			];
+			$sql_parts['where']['clock_till'] = 'h.clock<='.zbx_dbstr($options['time_till']);
 		}
 
 		// filter
 		if (is_array($options['filter'])) {
-			$query = CElasticsearchHelper::addFilter(DB::getSchema($table_name), $query, $options);
+			$this->dbFilter($sql_parts['from']['history'], $options, $sql_parts);
 		}
 
 		// search
 		if (is_array($options['search'])) {
-			$query = CElasticsearchHelper::addSearch($schema, $query, $options);
+			zbx_db_search($sql_parts['from']['history'], $options, $sql_parts);
 		}
 
 		// output
-		if ($options['output'] != API_OUTPUT_EXTEND && $options['output'] != API_OUTPUT_COUNT) {
-			$query['_source'] = $options['output'];
+		if ($options['output'] == API_OUTPUT_EXTEND) {
+			unset($sql_parts['select']['clock']);
+			$sql_parts['select']['history'] = 'h.*';
+		}
+
+		// countOutput
+		if ($options['countOutput']) {
+			$options['sortfield'] = '';
+			$sql_parts['select'] = ['count(DISTINCT h.hostid) as rowscount'];
+
+			// groupCount
+			if ($options['groupCount']) {
+				foreach ($sql_parts['group'] as $key => $fields) {
+					$sql_parts['select'][$key] = $fields;
+				}
+			}
 		}
 
 		// sorting
-		if ($this->sortColumns && $options['sortfield']) {
-			$query = CElasticsearchHelper::addSort($this->sortColumns, $query, $options);
-		}
+		$sql_parts = $this->applyQuerySortOptions($table_name, $this->tableAlias(), $options, $sql_parts);
 
 		// limit
 		if (zbx_ctype_digit($options['limit']) && $options['limit']) {
-			$query['size'] = $options['limit'];
+			$sql_parts['limit'] = $options['limit'];
 		}
 
-		$endpoints = CHistoryManager::getElasticsearchEndpoints($options['history']);
-		if ($endpoints) {
-			return CElasticsearchHelper::query('POST', reset($endpoints), $query);
+		$sql_parts['select'] = array_unique($sql_parts['select']);
+		$sql_parts['from'] = array_unique($sql_parts['from']);
+		$sql_parts['where'] = array_unique($sql_parts['where']);
+		$sql_parts['order'] = array_unique($sql_parts['order']);
+
+		$sql_select = '';
+		$sql_from = '';
+		$sql_order = '';
+
+		if ($sql_parts['select']) {
+			$sql_select .= implode(',', $sql_parts['select']);
 		}
 
-		return null;
+		if ($sql_parts['from']) {
+			$sql_from .= implode(',', $sql_parts['from']);
+		}
+
+		$sql_where = $sql_parts['where'] ? ' WHERE '.implode(' AND ', $sql_parts['where']) : '';
+
+		if ($sql_parts['order']) {
+			$sql_order .= ' ORDER BY '.implode(',', $sql_parts['order']);
+		}
+
+		$sql_limit = $sql_parts['limit'];
+		$sql = "SELECT itemid, toInt32(clock), ns, $value_col".
+				' FROM '.$sql_from.
+				$sql_where.
+				$sql_order;
+
+		$values = CClickHouseHelper::query($sql,1,array('itemid','clock','ns','value'));
+
+
+		error("Will exec sql $sql");
+
+		return $values;
 	}
 }
