@@ -2625,7 +2625,7 @@ static void	dc_local_add_history_notsupported(zbx_uint64_t itemid, const zbx_tim
 	item_value = dc_local_get_history_slot();
 
 	item_value->itemid = itemid;
-	item_value->ts = *ts;
+	item_value->ts = *ts; 
 	item_value->state = ITEM_STATE_NOTSUPPORTED;
 	item_value->flags = flags;
 
@@ -2634,11 +2634,27 @@ static void	dc_local_add_history_notsupported(zbx_uint64_t itemid, const zbx_tim
 		item_value->lastlogsize = lastlogsize;
 		item_value->mtime = mtime;
 	}
+	//this my bug in mishandling SNMP items when host didn't answer, where i handle snmp errors or smth
+    //so below is just a workaround todo: fix the error source- the error string left uninitialased at some conditions
 
-	item_value->value.value_str.len = zbx_db_strlen_n(error, ITEM_ERROR_LEN) + 1;
-	dc_string_buffer_realloc(item_value->value.value_str.len);
+	//zabbix_log(LOG_LEVEL_INFORMATION,"In dc_local_add_history unsupported just before if  item %d",itemid);
+	if (error) {
+		item_value->value.value_str.len = zbx_db_strlen_n(error, ITEM_ERROR_LEN) + 1;
+		dc_string_buffer_realloc(item_value->value.value_str.len);
+		memcpy(&string_values[string_values_offset], error, item_value->value.value_str.len);
+	
+	} else {
+		char *tmp="\0";
+		item_value->value.value_str.len = 1;
+		dc_string_buffer_realloc(item_value->value.value_str.len);
+		
+		memcpy(&string_values[string_values_offset], tmp, item_value->value.value_str.len);
+		
+	}
+	
+	//zabbix_log(LOG_LEVEL_INFORMATION,"In dc_local_add_history unsupported just after if  item %d",itemid);
+	;
 	item_value->value.value_str.pvalue = string_values_offset;
-	memcpy(&string_values[string_values_offset], error, item_value->value.value_str.len);
 	string_values_offset += item_value->value.value_str.len;
 }
 
@@ -2699,6 +2715,9 @@ void	dc_add_history(zbx_uint64_t itemid, unsigned char item_value_type, unsigned
 			lastlogsize = 0;
 			mtime = 0;
 		}
+
+		//zabbix_log(LOG_LEVEL_INFORMATION,"will call hist_unsupported for item %d ",itemid);
+		zabbix_log(LOG_LEVEL_INFORMATION,"will call hist_unsupported for item %d, error is %s",itemid,error);
 		dc_local_add_history_notsupported(itemid, ts, error, lastlogsize, mtime, value_flags);
 		return;
 	}
@@ -2710,6 +2729,7 @@ void	dc_add_history(zbx_uint64_t itemid, unsigned char item_value_type, unsigned
 
 		/* proxy stores low-level discovery (lld) values in db */
 		if (0 == (ZBX_PROGRAM_TYPE_SERVER & program_type))
+			//zabbix_log(LOG_LEVEL_INFORMATION,"will call add_hist_lld");
 			dc_local_add_history_lld(itemid, ts, result->text);
 
 		return;
@@ -2739,6 +2759,7 @@ void	dc_add_history(zbx_uint64_t itemid, unsigned char item_value_type, unsigned
 		}
 		else if (ISSET_UI64(result))
 		{
+			
 			dc_local_add_history_uint(itemid, item_value_type, ts, result->ui64, result->lastlogsize,
 					result->mtime, value_flags);
 		}
@@ -2758,7 +2779,8 @@ void	dc_add_history(zbx_uint64_t itemid, unsigned char item_value_type, unsigned
 					result->mtime, value_flags);
 		}
 		else
-		{
+		{  
+			zabbix_log(LOG_LEVEL_INFORMATION,"unknown rezult type returned");
 			THIS_SHOULD_NEVER_HAPPEN;
 		}
 	}

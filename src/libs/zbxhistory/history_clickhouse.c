@@ -458,7 +458,7 @@ static int	clickhouse_get_values(zbx_history_iface_t *hist, zbx_uint64_t itemid,
 	char	*sql_buffer=NULL;
 	size_t			buf_alloc = 0, buf_offset = 0;
 
-	return (ret);
+//	return (ret);
 
 	zabbix_log(LOG_LEVEL_DEBUG, "In %s() Data request: we are asked for item%d starting:%d ending:%d, count:%d", __function_name,itemid,start,end,count);
 

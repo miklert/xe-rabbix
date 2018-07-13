@@ -550,7 +550,7 @@ static void	zbx_load_config(ZBX_TASK_EX *task)
 		/* PARAMETER,			VAR,					TYPE,
 			MANDATORY,	MIN,			MAX */
 		{"StartDBSyncers",		&CONFIG_HISTSYNCER_FORKS,		TYPE_INT,
-			PARM_OPT,	1,			100},
+			PARM_OPT,	1,			300},
 		{"StartDiscoverers",		&CONFIG_DISCOVERER_FORKS,		TYPE_INT,
 			PARM_OPT,	0,			250},
 		{"StartHTTPPollers",		&CONFIG_HTTPPOLLER_FORKS,		TYPE_INT,

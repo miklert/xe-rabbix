@@ -37,10 +37,10 @@
 #define	ZBX_POLLER_TYPE_COUNT		5	/* number of poller types */
 
 #define MAX_JAVA_ITEMS		32
-#define MAX_SNMP_ITEMS		8192
-#define MAX_POLLER_ITEMS	8192	/* MAX(MAX_JAVA_ITEMS, MAX_SNMP_ITEMS) */
-#define MAX_PINGER_ITEMS	4096
-#define MAX_SNMP_ASYNC_HOSTS	8192	//maximum hosts to process simulteniously
+#define MAX_SNMP_ITEMS		32768
+#define MAX_POLLER_ITEMS	32768	/* MAX(MAX_JAVA_ITEMS, MAX_SNMP_ITEMS) */
+#define MAX_PINGER_ITEMS	8192
+#define MAX_SNMP_ASYNC_HOSTS	32768	//maximum hosts to process simulteniously
 					//this setting  multiplied by poller number - is how many
 					//sockets we would need in the worst case
 
