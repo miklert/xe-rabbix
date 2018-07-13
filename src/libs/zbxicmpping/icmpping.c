@@ -227,7 +227,7 @@ static int	process_ping(ZBX_FPING_HOST *hosts, int hosts_count, int count, int i
 			zbx_snprintf(tmp + offset, sizeof(tmp) - offset,
 					"%s %s 2>&1 <%s;", CONFIG_FPING6_LOCATION, params6, filename);
 	}
-#elsel
+#else
 	zbx_snprintf(tmp, sizeof(tmp), "%s %s 2>&1 <%s", CONFIG_FPING_LOCATION, params, filename);
 #endif	/* HAVE_IPV6 */
 
