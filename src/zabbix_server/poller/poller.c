@@ -431,7 +431,7 @@ static int	get_value(DC_ITEM *item, AGENT_RESULT *result, zbx_vector_ptr_t *add_
  *           see DCconfig_get_poller_items()                                  *
  *                                                                            *
  ******************************************************************************/
-static int	get_values(unsigned char poller_type, int *nextcheck, DC_ITEM *items)
+static int	get_values(unsigned char poller_type, unsigned int poller_num, int *nextcheck, DC_ITEM *items)
 {
 	const char		*__function_name = "get_values";
 	AGENT_RESULT		results[MAX_POLLER_ITEMS];
@@ -446,11 +446,11 @@ static int	get_values(unsigned char poller_type, int *nextcheck, DC_ITEM *items)
 	FILE		*f;
 
 
-	num = DCconfig_get_poller_items(poller_type, items);
+	num = DCconfig_get_poller_items(poller_type, poller_num, items);
 
 	if (0 == num)
 	{
-		*nextcheck = DCconfig_get_poller_nextcheck(poller_type);
+		*nextcheck = DCconfig_get_poller_nextcheck(poller_type,poller_num);
 		goto exit;
 	}
 
@@ -622,8 +622,8 @@ static int	get_values(unsigned char poller_type, int *nextcheck, DC_ITEM *items)
 			case GATEWAY_ERROR:
 			case TIMEOUT_ERROR:
 				if (HOST_AVAILABLE_FALSE != last_available)
-				{
-					zbx_deactivate_item_host(&items[i], &timespec, results[i].msg);
+				{	//todo: look if there is locks there
+					//zbx_deactivate_item_host(&items[i], &timespec, results[i].msg);
 					last_available = HOST_AVAILABLE_FALSE;
 				}
 				break;
@@ -686,8 +686,6 @@ static int	get_values(unsigned char poller_type, int *nextcheck, DC_ITEM *items)
 					items[i].state, results[i].msg);
 		}
 
-		DCpoller_requeue_items(&items[i].itemid, &items[i].state, &timespec.sec, &errcodes[i], 1, poller_type,
-				nextcheck);
 
 		zbx_free(items[i].key);
 
@@ -724,6 +722,8 @@ static int	get_values(unsigned char poller_type, int *nextcheck, DC_ITEM *items)
 		free_result(&results[i]);
 	}
 
+	DCpoller_requeue_items(items, timespec.sec, errcodes, num, poller_type, poller_num);
+
 	zbx_preprocessor_flush();
 	zbx_vector_ptr_clear_ext(&add_results, (zbx_mem_free_func_t)free_result_ptr);
 	zbx_vector_ptr_destroy(&add_results);
@@ -755,7 +755,7 @@ ZBX_THREAD_ENTRY(poller_thread, args)
 	zabbix_log(LOG_LEVEL_INFORMATION, "%s #%d started [%s #%d]", get_program_type_string(program_type),
 			server_num, get_process_type_string(process_type), process_num);
 #ifdef HAVE_NETSNMP
-	if (ZBX_POLLER_TYPE_NORMAL == poller_type || ZBX_POLLER_TYPE_UNREACHABLE == poller_type)
+	if (ZBX_POLLER_TYPE_NORMAL == poller_type)
 		zbx_init_snmp();
 #endif
 
@@ -782,7 +782,7 @@ ZBX_THREAD_ENTRY(poller_thread, args)
 		}
 
 		sec = zbx_time();
-		processed += get_values(poller_type, &nextcheck,items);
+		processed += get_values(poller_type, process_num, &nextcheck,items);
 		total_sec += zbx_time() - sec;
 
 		sleeptime = calculate_sleeptime(nextcheck, POLLER_DELAY);

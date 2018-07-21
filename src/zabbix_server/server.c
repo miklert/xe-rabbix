@@ -147,7 +147,7 @@ int	CONFIG_DISCOVERER_FORKS		= 1;
 int	CONFIG_HOUSEKEEPER_FORKS	= 1;
 int	CONFIG_PINGER_FORKS		= 1;
 int	CONFIG_POLLER_FORKS		= 5;
-int	CONFIG_UNREACHABLE_POLLER_FORKS	= 1;
+//int	CONFIG_UNREACHABLE_POLLER_FORKS	= 1;
 int	CONFIG_HTTPPOLLER_FORKS		= 1;
 int	CONFIG_IPMIPOLLER_FORKS		= 0;
 int	CONFIG_TIMER_FORKS		= 1;
@@ -358,11 +358,11 @@ int	get_process_info_by_thread(int local_server_num, unsigned char *local_proces
 		*local_process_type = ZBX_PROCESS_TYPE_POLLER;
 		*local_process_num = local_server_num - server_count + CONFIG_POLLER_FORKS;
 	}
-	else if (local_server_num <= (server_count += CONFIG_UNREACHABLE_POLLER_FORKS))
-	{
-		*local_process_type = ZBX_PROCESS_TYPE_UNREACHABLE;
-		*local_process_num = local_server_num - server_count + CONFIG_UNREACHABLE_POLLER_FORKS;
-	}
+//	else if (local_server_num <= (server_count += CONFIG_UNREACHABLE_POLLER_FORKS))
+//	{
+//		*local_process_type = ZBX_PROCESS_TYPE_UNREACHABLE;
+//		*local_process_num = local_server_num - server_count + CONFIG_UNREACHABLE_POLLER_FORKS;
+//	}
 	else if (local_server_num <= (server_count += CONFIG_TRAPPER_FORKS))
 	{
 		*local_process_type = ZBX_PROCESS_TYPE_TRAPPER;
@@ -468,12 +468,12 @@ static void	zbx_validate_config(ZBX_TASK_EX *task)
 {
 	int	err = 0;
 
-	if (0 == CONFIG_UNREACHABLE_POLLER_FORKS && 0 != CONFIG_POLLER_FORKS + CONFIG_JAVAPOLLER_FORKS)
-	{
-		zabbix_log(LOG_LEVEL_CRIT, "\"StartPollersUnreachable\" configuration parameter must not be 0"
-				" if regular or Java pollers are started");
-		err = 1;
-	}
+//	if (0 == CONFIG_UNREACHABLE_POLLER_FORKS && 0 != CONFIG_POLLER_FORKS + CONFIG_JAVAPOLLER_FORKS)
+//	{
+//		zabbix_log(LOG_LEVEL_CRIT, "\"StartPollersUnreachable\" configuration parameter must not be 0"
+//				" if regular or Java pollers are started");
+//		err = 1;
+//	}
 
 	if ((NULL == CONFIG_JAVA_GATEWAY || '\0' == *CONFIG_JAVA_GATEWAY) && 0 < CONFIG_JAVAPOLLER_FORKS)
 	{
@@ -559,8 +559,8 @@ static void	zbx_load_config(ZBX_TASK_EX *task)
 			PARM_OPT,	0,			1000},
 		{"StartPollers",		&CONFIG_POLLER_FORKS,			TYPE_INT,
 			PARM_OPT,	0,			1000},
-		{"StartPollersUnreachable",	&CONFIG_UNREACHABLE_POLLER_FORKS,	TYPE_INT,
-			PARM_OPT,	0,			1000},
+//		{"StartPollersUnreachable",	&CONFIG_UNREACHABLE_POLLER_FORKS,	TYPE_INT,
+//			PARM_OPT,	0,			1000},
 		{"StartIPMIPollers",		&CONFIG_IPMIPOLLER_FORKS,		TYPE_INT,
 			PARM_OPT,	0,			1000},
 		{"StartTimers",			&CONFIG_TIMER_FORKS,			TYPE_INT,
@@ -580,7 +580,7 @@ static void	zbx_load_config(ZBX_TASK_EX *task)
 		{"StartSNMPTrapper",		&CONFIG_SNMPTRAPPER_FORKS,		TYPE_INT,
 			PARM_OPT,	0,			1},
 		{"CacheSize",			&CONFIG_CONF_CACHE_SIZE,		TYPE_UINT64,
-			PARM_OPT,	128 * ZBX_KIBIBYTE,	__UINT64_C(8) * ZBX_GIBIBYTE},
+			PARM_OPT,	128 * ZBX_KIBIBYTE,	__UINT64_C(12) * ZBX_GIBIBYTE},
 		{"HistoryCacheSize",		&CONFIG_HISTORY_CACHE_SIZE,		TYPE_UINT64,
 			PARM_OPT,	128 * ZBX_KIBIBYTE,	__UINT64_C(2) * ZBX_GIBIBYTE},
 		{"HistoryIndexCacheSize",	&CONFIG_HISTORY_INDEX_CACHE_SIZE,	TYPE_UINT64,
@@ -1016,7 +1016,8 @@ int	MAIN_ZABBIX_ENTRY(int flags)
 		CONFIG_IPMIMANAGER_FORKS = 1;
 
 	threads_num = CONFIG_CONFSYNCER_FORKS + CONFIG_POLLER_FORKS
-			+ CONFIG_UNREACHABLE_POLLER_FORKS + CONFIG_TRAPPER_FORKS + CONFIG_PINGER_FORKS
+//			+ CONFIG_UNREACHABLE_POLLER_FORKS 
+			+ CONFIG_TRAPPER_FORKS + CONFIG_PINGER_FORKS
 			+ CONFIG_ALERTER_FORKS + CONFIG_HOUSEKEEPER_FORKS + CONFIG_TIMER_FORKS
 			+ CONFIG_HTTPPOLLER_FORKS + CONFIG_DISCOVERER_FORKS + CONFIG_HISTSYNCER_FORKS
 			+ CONFIG_ESCALATOR_FORKS + CONFIG_IPMIPOLLER_FORKS + CONFIG_JAVAPOLLER_FORKS
@@ -1063,11 +1064,11 @@ int	MAIN_ZABBIX_ENTRY(int flags)
 				thread_args.args = &poller_type;
 				threads[i] = zbx_thread_start(poller_thread, &thread_args);
 				break;
-			case ZBX_PROCESS_TYPE_UNREACHABLE:
-				poller_type = ZBX_PROCESS_TYPE_UNREACHABLE;
-				thread_args.args = &poller_type;
-				threads[i] = zbx_thread_start(poller_thread, &thread_args);
-				break;
+//			case ZBX_PROCESS_TYPE_UNREACHABLE:
+//				poller_type = ZBX_PROCESS_TYPE_UNREACHABLE;
+//				thread_args.args = &poller_type;
+//				threads[i] = zbx_thread_start(poller_thread, &thread_args);
+//				break;
 			case ZBX_PROCESS_TYPE_TRAPPER:
 				thread_args.args = &listen_sock;
 				threads[i] = zbx_thread_start(trapper_thread, &thread_args);

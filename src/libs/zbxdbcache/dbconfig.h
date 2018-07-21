@@ -24,6 +24,8 @@
 #	error This header must be used by configuration cache implementation
 #endif
 
+//extern const  ZBX_MUTEX	qeue_lock[ZBX_POLLER_TYPE_COUNT][ZBX_POLLER_QUEUES_PER_POLLER_TYPE];
+
 typedef struct
 {
 	zbx_uint64_t		triggerid;
@@ -655,7 +657,7 @@ typedef struct
 	zbx_hashset_t		psks;			/* for keeping PSK-identity and PSK pairs and for searching */
 							/* by PSK identity */
 #endif
-	zbx_binary_heap_t	queues[ZBX_POLLER_TYPE_COUNT];
+	zbx_binary_heap_t	queues[ZBX_POLLER_TYPE_COUNT][ZBX_POLLER_QUEUES_PER_POLLER_TYPE];
 	zbx_binary_heap_t	pqueue;
 	zbx_vector_uint64_t	locked_lld_ruleids;	/* for keeping track of lld rules being processed */
 	ZBX_DC_CONFIG_TABLE	*config;

@@ -56,7 +56,7 @@ extern int		server_num, process_num;
  *                                                                            *
  ******************************************************************************/
 static void	process_value(zbx_uint64_t itemid, zbx_uint64_t *value_ui64, double *value_dbl,	zbx_timespec_t *ts,
-		int ping_result, char *error)
+		int ping_result, char *error, unsigned int process_num)
 {
 	const char	*__function_name = "process_value";
 	DC_ITEM		item;
@@ -96,7 +96,7 @@ static void	process_value(zbx_uint64_t itemid, zbx_uint64_t *value_ui64, double 
 		free_result(&value);
 	}
 clean:
-	DCrequeue_items(&item.itemid, &item.state, &ts->sec, &errcode, 1);
+	DCrequeue_items(&item.itemid, &item.state, &ts->sec, &errcode, 1,ZBX_POLLER_TYPE_PINGER, process_num);
 
 	DCconfig_clean_items(&item, &errcode, 1);
 
@@ -119,7 +119,7 @@ clean:
  *                                                                            *
  ******************************************************************************/
 static void	process_values(icmpitem_t *items, int first_index, int last_index, ZBX_FPING_HOST *hosts,
-		int hosts_count, zbx_timespec_t *ts, int ping_result, char *error)
+		int hosts_count, zbx_timespec_t *ts, int ping_result, char *error, unsigned int process_num)
 {
 	const char	*__function_name = "process_values";
 	int		i, h;
@@ -152,14 +152,14 @@ static void	process_values(icmpitem_t *items, int first_index, int last_index, Z
 
 			if (NOTSUPPORTED == ping_result)
 			{
-				process_value(item->itemid, NULL, NULL, ts, NOTSUPPORTED, error);
+				process_value(item->itemid, NULL, NULL, ts, NOTSUPPORTED, error,process_num);
 				continue;
 			}
 
 			if (0 == host->cnt)
 			{
 				process_value(item->itemid, NULL, NULL, ts, NOTSUPPORTED,
-						"Cannot send ICMP ping packets to this host.");
+						"Cannot send ICMP ping packets to this host.",process_num);
 				continue;
 			}
 
@@ -167,7 +167,7 @@ static void	process_values(icmpitem_t *items, int first_index, int last_index, Z
 			{
 				case ICMPPING:
 					value_uint64 = (0 != host->rcv ? 1 : 0);
-					process_value(item->itemid, &value_uint64, NULL, ts, SUCCEED, NULL);
+					process_value(item->itemid, &value_uint64, NULL, ts, SUCCEED, NULL,process_num);
 					break;
 				case ICMPPINGSEC:
 					switch (item->type)
@@ -186,11 +186,11 @@ static void	process_values(icmpitem_t *items, int first_index, int last_index, Z
 					if (0 < value_dbl && ZBX_FLOAT_PRECISION > value_dbl)
 						value_dbl = ZBX_FLOAT_PRECISION;
 
-					process_value(item->itemid, NULL, &value_dbl, ts, SUCCEED, NULL);
+					process_value(item->itemid, NULL, &value_dbl, ts, SUCCEED, NULL,process_num);
 					break;
 				case ICMPPINGLOSS:
 					value_dbl = (100 * (host->cnt - host->rcv)) / (double)host->cnt;
-					process_value(item->itemid, NULL, &value_dbl, ts, SUCCEED, NULL);
+					process_value(item->itemid, NULL, &value_dbl, ts, SUCCEED, NULL,process_num);
 					break;
 			}
 		}
@@ -408,7 +408,7 @@ static void	add_icmpping_item(icmpitem_t **items, int *items_alloc, int *items_c
  * Comments:                                                                  *
  *                                                                            *
  ******************************************************************************/
-static void	get_pinger_hosts(icmpitem_t **icmp_items, int *icmp_items_alloc, int *icmp_items_count)
+static void	get_pinger_hosts(unsigned int process_num, icmpitem_t **icmp_items, int *icmp_items_alloc, int *icmp_items_count)
 {
 
 	const char		*__function_name = "get_pinger_hosts";
@@ -423,7 +423,7 @@ static void	get_pinger_hosts(icmpitem_t **icmp_items, int *icmp_items_alloc, int
 
 	items=zbx_malloc(NULL,sizeof(DC_ITEM)*MAX_POLLER_ITEMS);
 
-	num = DCconfig_get_poller_items(ZBX_POLLER_TYPE_PINGER, items);
+	num = DCconfig_get_poller_items(ZBX_POLLER_TYPE_PINGER, process_num, items);
 
 	for (i = 0; i < num; i++)
 	{
@@ -452,7 +452,7 @@ static void	get_pinger_hosts(icmpitem_t **icmp_items, int *icmp_items_alloc, int
 			zbx_preprocess_item_value(items[i].itemid, items[i].value_type, items[i].flags, NULL, &ts,
 					items[i].state, error);
 
-			DCrequeue_items(&items[i].itemid, &items[i].state, &ts.sec, &errcode, 1);
+			DCrequeue_items(&items[i].itemid, &items[i].state, &ts.sec, &errcode, 1,ZBX_POLLER_TYPE_PINGER, process_num);
 		}
 
 		zbx_free(items[i].key);
@@ -552,7 +552,7 @@ static void	process_pinger_hosts(icmpitem_t *items, int items_count)
 						items[i].count, items[i].interval, items[i].size, items[i].timeout,
 						error, sizeof(error));
 
-			process_values(items, first_index, i + 1, hosts, hosts_count, &ts, ping_result, error);
+			process_values(items, first_index, i + 1, hosts, hosts_count, &ts, ping_result, error,process_num);
 
 			hosts_count = 0;
 			first_index = i + 1;
@@ -601,14 +601,14 @@ ZBX_THREAD_ENTRY(pinger_thread, args)
 		zbx_setproctitle("%s #%d [getting values]", get_process_type_string(process_type), process_num);
 
 		sec = zbx_time();
-		get_pinger_hosts(&items, &items_alloc, &items_count);
+		get_pinger_hosts(process_num, &items, &items_alloc, &items_count);
 		process_pinger_hosts(items, items_count);
 		sec = zbx_time() - sec;
 		itc = items_count;
 
 		free_hosts(&items, &items_count);
 
-		nextcheck = DCconfig_get_poller_nextcheck(ZBX_POLLER_TYPE_PINGER);
+		nextcheck = DCconfig_get_poller_nextcheck(ZBX_POLLER_TYPE_PINGER,process_num);
 		sleeptime = calculate_sleeptime(nextcheck, POLLER_DELAY);
 
 		zbx_setproctitle("%s #%d [got %d values in " ZBX_FS_DBL " sec, idle %d sec]",

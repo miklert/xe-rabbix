@@ -30,11 +30,12 @@
 
 #define	ZBX_NO_POLLER			255
 #define	ZBX_POLLER_TYPE_NORMAL		0
-#define	ZBX_POLLER_TYPE_UNREACHABLE	1
-#define	ZBX_POLLER_TYPE_IPMI		2
-#define	ZBX_POLLER_TYPE_PINGER		3
-#define	ZBX_POLLER_TYPE_JAVA		4
-#define	ZBX_POLLER_TYPE_COUNT		5	/* number of poller types */
+#define	ZBX_POLLER_TYPE_IPMI		1
+#define	ZBX_POLLER_TYPE_PINGER		2
+#define	ZBX_POLLER_TYPE_JAVA		3
+#define	ZBX_POLLER_TYPE_COUNT		4	/* number of poller types */
+#define ZBX_POLLER_QUEUES_PER_POLLER_TYPE		4	/* number of queues per poller type, number of threads must be more then this number at least twice */
+
 
 #define MAX_JAVA_ITEMS		32
 #define MAX_SNMP_ITEMS		32768
@@ -582,9 +583,9 @@ void	DCconfig_update_interface_snmp_stats(zbx_uint64_t interfaceid, int max_snmp
 int	DCconfig_get_suggested_snmp_vars(zbx_uint64_t interfaceid, int *bulk);
 int	DCconfig_get_interface_by_type(DC_INTERFACE *interface, zbx_uint64_t hostid, unsigned char type);
 int	DCconfig_get_interface(DC_INTERFACE *interface, zbx_uint64_t hostid, zbx_uint64_t itemid);
-int	DCconfig_get_poller_nextcheck(unsigned char poller_type);
-int	DCconfig_get_poller_items(unsigned char poller_type, DC_ITEM *items);
-int	DCconfig_get_ipmi_poller_items(int now, DC_ITEM *items, int items_num, int *nextcheck);
+int	DCconfig_get_poller_nextcheck(unsigned char poller_type, unsigned int poller_num);
+int	DCconfig_get_poller_items(unsigned char poller_type, unsigned int poller_num, DC_ITEM *items);
+int	DCconfig_get_ipmi_poller_items(int now, DC_ITEM *items, int items_num, int *nextcheck, unsigned int process_num);
 int	DCconfig_get_snmp_interfaceids_by_addr(const char *addr, zbx_uint64_t **interfaceids);
 size_t	DCconfig_get_snmp_items_by_interfaceid(zbx_uint64_t interfaceid, DC_ITEM **items);
 
@@ -595,9 +596,11 @@ size_t	DCconfig_get_snmp_items_by_interfaceid(zbx_uint64_t interfaceid, DC_ITEM 
 #define ZBX_HK_TRENDS_MIN	SEC_PER_DAY
 
 void	DCrequeue_items(const zbx_uint64_t *itemids, const unsigned char *states, const int *lastclocks,
-		const int *errcodes, size_t num);
-void	DCpoller_requeue_items(const zbx_uint64_t *itemids, const unsigned char *states, const int *lastclocks,
-		const int *errcodes, size_t num, unsigned char poller_type, int *nextcheck);
+		const int *errcodes, size_t num, unsigned int poller_type, unsigned int process_num);
+
+void	DCpoller_requeue_items(const DC_ITEM *items, const int lastclock,
+		const int *errcodes, size_t num, unsigned char poller_type, unsigned int process_num);
+
 void	zbx_dc_requeue_unreachable_items(zbx_uint64_t *itemids, size_t itemids_num);
 int	DCconfig_activate_host(DC_ITEM *item);
 int	DCconfig_deactivate_host(DC_ITEM *item, int now);

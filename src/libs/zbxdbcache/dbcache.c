@@ -42,12 +42,16 @@ static zbx_mem_info_t	*trend_mem = NULL;
 
 #define	LOCK_CACHE	zbx_mutex_lock(&cache_lock)
 #define	UNLOCK_CACHE	zbx_mutex_unlock(&cache_lock)
+
 #define	LOCK_TRENDS	zbx_mutex_lock(&trends_lock)
 #define	UNLOCK_TRENDS	zbx_mutex_unlock(&trends_lock)
+
 #define	LOCK_CACHE_IDS		zbx_mutex_lock(&cache_ids_lock)
 #define	UNLOCK_CACHE_IDS	zbx_mutex_unlock(&cache_ids_lock)
 
 static ZBX_MUTEX	cache_lock = ZBX_MUTEX_NULL;
+  ZBX_MUTEX	queue_lock[ZBX_POLLER_TYPE_COUNT][ZBX_POLLER_QUEUES_PER_POLLER_TYPE];
+
 static ZBX_MUTEX	trends_lock = ZBX_MUTEX_NULL;
 static ZBX_MUTEX	cache_ids_lock = ZBX_MUTEX_NULL;
 
@@ -3479,12 +3483,22 @@ int	init_database_cache(char **error)
 {
 	const char	*__function_name = "init_database_cache";
 
-	int		ret;
+	int		i,k,ret,mutex_count=0;
 
 	zabbix_log(LOG_LEVEL_DEBUG, "In %s()", __function_name);
-
+    
 	if (SUCCEED != (ret = zbx_mutex_create(&cache_lock, ZBX_MUTEX_CACHE, error)))
 		goto out;
+
+	
+	for( i=0; i< ZBX_POLLER_TYPE_COUNT; i++) 
+	    for ( k=0; k< ZBX_POLLER_QUEUES_PER_POLLER_TYPE; k++) {
+		queue_lock[i][k]=ZBX_MUTEX_NULL;
+		if (SUCCEED != (ret = zbx_mutex_create(&queue_lock[i][k], ZBX_MUTEX_QUEUE_BASE + mutex_count, error)))
+		    goto out;
+		zabbix_log(LOG_LEVEL_DEBUG, "In %s(): created mutex %d addr is %d", __function_name,  ZBX_MUTEX_QUEUE_BASE + mutex_count, queue_lock[i][k]);
+		mutex_count++;
+	}
 
 	if (SUCCEED != (ret = zbx_mutex_create(&cache_ids_lock, ZBX_MUTEX_CACHE_IDS, error)))
 		goto out;
@@ -3563,6 +3577,8 @@ void	free_database_cache(void)
 {
 	const char	*__function_name = "free_database_cache";
 
+	unsigned int i,k;
+
 	zabbix_log(LOG_LEVEL_DEBUG, "In %s()", __function_name);
 
 	DCsync_all();
@@ -3570,6 +3586,11 @@ void	free_database_cache(void)
 	cache = NULL;
 
 	zbx_mutex_destroy(&cache_lock);
+	for( i=0; i< ZBX_POLLER_TYPE_COUNT; i++) 
+	    for ( k=0; k< ZBX_POLLER_QUEUES_PER_POLLER_TYPE; k++) 
+		zbx_mutex_destroy(&queue_lock[i][k]);
+		
+
 	zbx_mutex_destroy(&cache_ids_lock);
 
 	if (0 != (program_type & ZBX_PROGRAM_TYPE_SERVER))

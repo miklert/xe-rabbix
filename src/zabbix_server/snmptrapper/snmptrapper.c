@@ -79,7 +79,7 @@ static void	DBupdate_lastsize()
  * Author: Rudolfs Kreicbergs                                                 *
  *                                                                            *
  ******************************************************************************/
-static int	process_trap_for_interface(zbx_uint64_t interfaceid, char *trap, zbx_timespec_t *ts)
+static int	process_trap_for_interface(zbx_uint64_t interfaceid, char *trap, zbx_timespec_t *ts,unsigned int process_num)
 {
 	DC_ITEM			*items = NULL;
 	const char		*regex;
@@ -203,8 +203,8 @@ next:
 	}
 
 	zbx_free(results);
-
-	DCrequeue_items(itemids, states, lastclocks, errcodes, num);
+	//todo: this potentially a problem as there is no poller_type_trapper type
+	DCrequeue_items(itemids, states, lastclocks, errcodes, num, ZBX_POLLER_TYPE_NORMAL, process_num);
 
 	zbx_free(errcodes);
 	zbx_free(lastclocks);
@@ -235,7 +235,7 @@ next:
  * Author: Rudolfs Kreicbergs                                                 *
  *                                                                            *
  ******************************************************************************/
-static void	process_trap(const char *addr, char *begin, char *end)
+static void	process_trap(const char *addr, char *begin, char *end,unsigned int process_num)
 {
 	zbx_timespec_t	ts;
 	zbx_uint64_t	*interfaceids = NULL;
@@ -249,7 +249,7 @@ static void	process_trap(const char *addr, char *begin, char *end)
 
 	for (i = 0; i < count; i++)
 	{
-		if (SUCCEED == process_trap_for_interface(interfaceids[i], trap, &ts))
+		if (SUCCEED == process_trap_for_interface(interfaceids[i], trap, &ts,process_num))
 			ret = SUCCEED;
 	}
 
@@ -314,7 +314,7 @@ static void	parse_traps(int flag)
 			*pzdate = '\0';
 			*pzaddr = '\0';
 
-			process_trap(addr, begin, end);
+			process_trap(addr, begin, end, process_num);
 			end = NULL;
 		}
 
@@ -366,7 +366,7 @@ static void	parse_traps(int flag)
 			*pzdate = '\0';
 			*pzaddr = '\0';
 
-			process_trap(addr, begin, end);
+			process_trap(addr, begin, end,process_num);
 			offset = 0;
 			*buffer = '\0';
 		}

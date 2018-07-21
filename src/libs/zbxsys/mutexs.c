@@ -86,9 +86,10 @@ int	zbx_mutex_create(ZBX_MUTEX *mutex, ZBX_MUTEX_NAME name, char **error)
 		semopts.val = 1;
 		for (i = 0; ZBX_MUTEX_COUNT > i; i++)
 		{
-			if (-1 != semctl(ZBX_SEM_LIST_ID, i, SETVAL, semopts))
+			if (-1 != semctl(ZBX_SEM_LIST_ID, i, SETVAL, semopts)) {
+				zbx_error("semtcl ZBX_SEM_LIST_ID, SETVAL opts  %d",i);
 				continue;
-
+			}
 			*error = zbx_dsprintf(*error, "cannot initialize semaphore: %s", zbx_strerror(errno));
 
 			if (-1 == semctl(ZBX_SEM_LIST_ID, 0, IPC_RMID, 0))
@@ -147,8 +148,8 @@ void	__zbx_mutex_lock(const char *filename, int line, ZBX_MUTEX *mutex)
 			THIS_SHOULD_NEVER_HAPPEN;
 			exit(EXIT_FAILURE);
 		default:
-			zbx_error("[file:'%s',line:%d] lock failed: %s",
-				filename, line, strerror_from_system(GetLastError()));
+			zbx_error("[file:'%s',line:%d] lock failed: %s mutex addr is %d",
+				filename, line, strerror_from_system(GetLastError()),*mutex);
 			exit(EXIT_FAILURE);
 	}
 #else
@@ -156,14 +157,16 @@ void	__zbx_mutex_lock(const char *filename, int line, ZBX_MUTEX *mutex)
 	sem_lock.sem_op = -1;
 	sem_lock.sem_flg = SEM_UNDO;
 
+//	zbx_error("zbx_mutex_lock: starting mutext wait %d", sem_lock.sem_num);
 	while (-1 == semop(ZBX_SEM_LIST_ID, &sem_lock, 1))
 	{
 		if (EINTR != errno)
 		{
-			zbx_error("[file:'%s',line:%d] lock failed: %s", filename, line, zbx_strerror(errno));
+			zbx_error("[file:'%s',line:%d] lock failed: %s  mutex addr is %d", filename, line, zbx_strerror(errno),*mutex);
 			exit(EXIT_FAILURE);
 		}
 	}
+//	zbx_error("zbx_mutex_lock: finished mutext wait, mutex is locked to us");
 #endif
 }
 

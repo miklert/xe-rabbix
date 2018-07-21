@@ -88,7 +88,7 @@ static ZBX_MUTEX	sm_lock = ZBX_MUTEX_NULL;
 
 extern char	*CONFIG_FILE;
 extern int	CONFIG_POLLER_FORKS;
-extern int	CONFIG_UNREACHABLE_POLLER_FORKS;
+//extern int	CONFIG_UNREACHABLE_POLLER_FORKS;
 extern int	CONFIG_IPMIPOLLER_FORKS;
 extern int	CONFIG_PINGER_FORKS;
 extern int	CONFIG_JAVAPOLLER_FORKS;
@@ -138,8 +138,8 @@ int	get_process_type_forks(unsigned char proc_type)
 	{
 		case ZBX_PROCESS_TYPE_POLLER:
 			return CONFIG_POLLER_FORKS;
-		case ZBX_PROCESS_TYPE_UNREACHABLE:
-			return CONFIG_UNREACHABLE_POLLER_FORKS;
+//		case ZBX_PROCESS_TYPE_UNREACHABLE:
+//			return CONFIG_UNREACHABLE_POLLER_FORKS;
 		case ZBX_PROCESS_TYPE_IPMIPOLLER:
 			return CONFIG_IPMIPOLLER_FORKS;
 		case ZBX_PROCESS_TYPE_PINGER:
@@ -195,7 +195,8 @@ int	get_process_type_forks(unsigned char proc_type)
 	}
 
 	THIS_SHOULD_NEVER_HAPPEN;
-	exit(EXIT_FAILURE);
+//todo: if it works, figure, where unreachable poller still comes from
+//	exit(EXIT_FAILURE);
 }
 
 /******************************************************************************
@@ -218,8 +219,8 @@ const char	*get_process_type_string(unsigned char proc_type)
 	{
 		case ZBX_PROCESS_TYPE_POLLER:
 			return "poller";
-		case ZBX_PROCESS_TYPE_UNREACHABLE:
-			return "unreachable poller";
+//		case ZBX_PROCESS_TYPE_UNREACHABLE:
+//			return "unreachable poller";
 		case ZBX_PROCESS_TYPE_IPMIPOLLER:
 			return "ipmi poller";
 		case ZBX_PROCESS_TYPE_PINGER:
