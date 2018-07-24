@@ -37,7 +37,7 @@ extern int		server_num, process_num, CONFIG_PREPROCESSOR_FORKS;
 
 #define ZBX_PREPROCESSING_MANAGER_DELAY	1
 //this must be big enough to hold buffer for occasional slowdownds, so 10-15 threads might submit data without stucking
-#define ZBX_PREPROCESSING_MAX_QUEUE_TRESHOLD 100000
+#define ZBX_PREPROCESSING_MAX_QUEUE_TRESHOLD 1000000
 
 
 #define ZBX_PREPROC_PRIORITY_NONE	0

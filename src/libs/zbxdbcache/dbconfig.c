@@ -50,7 +50,8 @@ static int	sync_in_progress = 0;
 #define QIDX	hostid % ZBX_POLLER_QUEUES_PER_POLLER_TYPE
 #define QPIDX	(process_num-1) % ZBX_POLLER_QUEUES_PER_POLLER_TYPE
 
-#define LOCK_QUEUE	LOCK_CACHE; zbx_mutex_lock(&mutex_num); UNLOCK_CACHE
+//#define LOCK_QUEUE	LOCK_CACHE; zbx_mutex_lock(&mutex_num); UNLOCK_CACHE
+#define LOCK_QUEUE	zbx_mutex_lock(&mutex_num);
 #define UNLOCK_QUEUE	zbx_mutex_unlock(&mutex_num)
 
 #define ZBX_LOC_NOWHERE	0
@@ -7568,12 +7569,12 @@ void	DCrequeue_items(const zbx_uint64_t *itemids, const unsigned char *states, c
 		const int *errcodes, size_t num, unsigned int poller_type, unsigned int process_num )
 {
 	unsigned int mutex_num=ZBX_MUTEX_QUEUE_BASE+poller_type*ZBX_POLLER_QUEUES_PER_POLLER_TYPE+QPIDX;
-	zabbix_log(LOG_LEVEL_INFORMATION, "In DCrequeue_item (poller_type:%d,queue:%d,mutex: %d) Locking mutex" ,poller_type,QPIDX,mutex_num);
+//	zabbix_log(LOG_LEVEL_INFORMATION, "In DCrequeue_item (poller_type:%d,queue:%d,mutex: %d) Locking mutex" ,poller_type,QPIDX,mutex_num);
 	LOCK_QUEUE;
-	zabbix_log(LOG_LEVEL_INFORMATION, "In DCrequeue_item (poller_type:%d,queue:%d,mutex: %d) Locked mutex" ,poller_type,QPIDX,mutex_num);
+//	zabbix_log(LOG_LEVEL_INFORMATION, "In DCrequeue_item (poller_type:%d,queue:%d,mutex: %d) Locked mutex" ,poller_type,QPIDX,mutex_num);
 	dc_requeue_items(itemids, states, lastclocks, errcodes, num);
 
-	zabbix_log(LOG_LEVEL_INFORMATION, "In DCrequeue_item (poller_type:%d,queue:%d,mutex: %d) Unlocking mutex" ,poller_type,QPIDX,mutex_num);
+//	zabbix_log(LOG_LEVEL_INFORMATION, "In DCrequeue_item (poller_type:%d,queue:%d,mutex: %d) Unlocking mutex" ,poller_type,QPIDX,mutex_num);
 	UNLOCK_QUEUE;
 }
 

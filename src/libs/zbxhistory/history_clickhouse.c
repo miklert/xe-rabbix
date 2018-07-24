@@ -670,7 +670,7 @@ static int	clickhouse_add_values(zbx_history_iface_t *hist, const zbx_vector_ptr
 		
 		 if (ITEM_VALUE_TYPE_UINT64 == h->value_type) {
 		    //zabbix_log(LOG_LEVEL_DEBUG, "Parsing value as UIN64 type");
-		    zbx_snprintf_alloc(&tmp_buffer,&tmp_alloc,&tmp_offset,"(CAST(%d as date) ,%d,%d,%d,%d,0),",
+		    zbx_snprintf_alloc(&tmp_buffer,&tmp_alloc,&tmp_offset,"(CAST(%d as date) ,%d,%d,%d,%ld,0),",
 					h->ts.sec,h->itemid,h->ts.sec,h->ts.ns,h->value.ui64);
 		}
 
