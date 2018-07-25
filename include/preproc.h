@@ -26,8 +26,8 @@
 /* the following functions are implemened differently for server and proxy */
 
 void	zbx_preprocess_item_value(zbx_uint64_t itemid, unsigned char item_value_type, unsigned char item_flags,
-		AGENT_RESULT *result, zbx_timespec_t *ts, unsigned char state, char *error);
-void	zbx_preprocessor_flush(void);
+		AGENT_RESULT *result, zbx_timespec_t *ts, unsigned char state, char *error, unsigned int process_num);
+void	zbx_preprocessor_flush(unsigned int i);
 zbx_uint64_t	zbx_preprocessor_get_queue_size(void);
 
 #endif /* ZABBIX_PREPROC_H */

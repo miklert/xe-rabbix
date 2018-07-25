@@ -98,6 +98,7 @@ static void worker_preprocess_value(zbx_ipc_socket_t *socket, zbx_ipc_message_t 
 
 	if (history_value != &history_value_local)
 		zbx_free(history_value);
+	
 
 	if (FAIL == zbx_ipc_socket_write(socket, ZBX_IPC_PREPROCESSOR_RESULT, data, size))
 	{
@@ -114,6 +115,7 @@ ZBX_THREAD_ENTRY(preprocessing_worker_thread, args)
 	char			*error = NULL;
 	zbx_ipc_socket_t	socket;
 	zbx_ipc_message_t	message;
+	char 			*socket_name;
 
 	process_type = ((zbx_thread_args_t *)args)->process_type;
 	server_num = ((zbx_thread_args_t *)args)->server_num;
@@ -123,7 +125,11 @@ ZBX_THREAD_ENTRY(preprocessing_worker_thread, args)
 
 	zbx_ipc_message_init(&message);
 
-	if (FAIL == zbx_ipc_socket_open(&socket, ZBX_IPC_SERVICE_PREPROCESSING_WORKER, 10, &error))
+	if (process_num % 2) 
+	    socket_name=ZBX_IPC_SERVICE_PREPROCESSING_WORKER1;
+	else socket_name=ZBX_IPC_SERVICE_PREPROCESSING_WORKER2;
+
+	if (FAIL == zbx_ipc_socket_open(&socket, socket_name, 10, &error))
 	{
 		zabbix_log(LOG_LEVEL_CRIT, "cannot connect to preprocessing service: %s", error);
 		zbx_free(error);

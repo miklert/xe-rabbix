@@ -642,7 +642,7 @@ static int	get_values(unsigned char poller_type, unsigned int poller_num, int *n
 			{
 				items[i].state = ITEM_STATE_NORMAL;
 				zbx_preprocess_item_value(items[i].itemid, items[i].value_type, items[i].flags,
-						&results[i], &timespec, items[i].state, NULL);
+						&results[i], &timespec, items[i].state, NULL,process_num);
 			}
 			else
 			{
@@ -660,14 +660,14 @@ static int	get_values(unsigned char poller_type, unsigned int poller_num, int *n
 						items[i].state = ITEM_STATE_NOTSUPPORTED;
 						zbx_preprocess_item_value(items[i].itemid, items[i].value_type,
 								items[i].flags, NULL, &ts_tmp, items[i].state,
-								add_result->msg);
+								add_result->msg,process_num);
 					}
 					else
 					{
 						items[i].state = ITEM_STATE_NORMAL;
 						zbx_preprocess_item_value(items[i].itemid, items[i].value_type,
 								items[i].flags, add_result, &ts_tmp, items[i].state,
-								NULL);
+								NULL,process_num);
 					}
 
 					/* ensure that every log item value timestamp is unique */
@@ -683,7 +683,7 @@ static int	get_values(unsigned char poller_type, unsigned int poller_num, int *n
 		{
 			items[i].state = ITEM_STATE_NOTSUPPORTED;
 			zbx_preprocess_item_value(items[i].itemid, items[i].value_type, items[i].flags, NULL, &timespec,
-					items[i].state, results[i].msg);
+					items[i].state, results[i].msg,process_num);
 		}
 
 
@@ -724,7 +724,7 @@ static int	get_values(unsigned char poller_type, unsigned int poller_num, int *n
 
 	DCpoller_requeue_items(items, timespec.sec, errcodes, num, poller_type, poller_num);
 
-	zbx_preprocessor_flush();
+	zbx_preprocessor_flush(process_num);
 	zbx_vector_ptr_clear_ext(&add_results, (zbx_mem_free_func_t)free_result_ptr);
 	zbx_vector_ptr_destroy(&add_results);
 

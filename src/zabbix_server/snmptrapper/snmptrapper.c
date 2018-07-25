@@ -181,7 +181,7 @@ next:
 
 				items[i].state = ITEM_STATE_NORMAL;
 				zbx_preprocess_item_value(items[i].itemid, items[i].value_type, items[i].flags,
-						&results[i], ts, items[i].state, NULL);
+						&results[i], ts, items[i].state, NULL,0);
 
 				itemids[i] = items[i].itemid;
 				states[i] = items[i].state;
@@ -190,7 +190,7 @@ next:
 			case NOTSUPPORTED:
 				items[i].state = ITEM_STATE_NOTSUPPORTED;
 				zbx_preprocess_item_value(items[i].itemid, items[i].value_type, items[i].flags, NULL,
-						ts, items[i].state, results[i].msg);
+						ts, items[i].state, results[i].msg,0);
 
 				itemids[i] = items[i].itemid;
 				states[i] = items[i].state;
@@ -217,7 +217,7 @@ next:
 	zbx_regexp_clean_expressions(&regexps);
 	zbx_vector_ptr_destroy(&regexps);
 
-	zbx_preprocessor_flush();
+	zbx_preprocessor_flush(0);
 
 	return ret;
 }

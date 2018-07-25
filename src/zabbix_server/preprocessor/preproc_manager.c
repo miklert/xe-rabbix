@@ -1014,6 +1014,10 @@ ZBX_THREAD_ENTRY(preprocessing_manager_thread, args)
 	zbx_preprocessing_manager_t	manager;
 	int				ret;
 	double				time_stat, time_idle = 0, time_now, time_flush, time_file = 0;
+	char		*socket_preproc;
+	char		*socket_worker;
+
+
 
 #define	STAT_INTERVAL	5	/* if a process is busy and does not sleep then update status not faster than */
 				/* once in STAT_INTERVAL seconds */
@@ -1027,14 +1031,25 @@ ZBX_THREAD_ENTRY(preprocessing_manager_thread, args)
 	zabbix_log(LOG_LEVEL_INFORMATION, "%s #%d started [%s #%d]", get_program_type_string(program_type),
 			server_num, get_process_type_string(process_type), process_num);
 
-	if (FAIL == zbx_ipc_service_start(&service_requests, ZBX_IPC_SERVICE_PREPROCESSING, &error))
+	if (process_num % 2)
+	{ 
+	    socket_preproc=ZBX_IPC_SERVICE_PREPROCESSING1;
+	    socket_worker=ZBX_IPC_SERVICE_PREPROCESSING_WORKER1;
+	}
+	else
+	{
+	    socket_preproc=ZBX_IPC_SERVICE_PREPROCESSING2;
+	    socket_worker=ZBX_IPC_SERVICE_PREPROCESSING_WORKER2;
+	}
+
+	if (FAIL == zbx_ipc_service_start(&service_requests, socket_preproc, &error))
 	{
 		zabbix_log(LOG_LEVEL_CRIT, "cannot start preprocessing service for requests: %s", error);
 		zbx_free(error);
 		exit(EXIT_FAILURE);
 	}
 
-	if (FAIL == zbx_ipc_service_start(&service_results, ZBX_IPC_SERVICE_PREPROCESSING_WORKER, &error))
+	if (FAIL == zbx_ipc_service_start(&service_results, socket_worker, &error))
 	{
 		zabbix_log(LOG_LEVEL_CRIT, "cannot start preprocessing service: %s", error);
 		zbx_free(error);

@@ -200,8 +200,9 @@ static void	process_test_data(zbx_uint64_t httptestid, int lastfailedstep, doubl
 			}
 
 			items[i].state = ITEM_STATE_NORMAL;
+			//todo: fix to send to correct preprocessor
 			zbx_preprocess_item_value(items[i].itemid, items[i].value_type, 0, &value, ts, items[i].state,
-					NULL);
+					NULL,0);
 
 			free_result(&value);
 		}
@@ -345,8 +346,9 @@ static void	process_step_data(zbx_uint64_t httpstepid, zbx_httpstat_t *stat, zbx
 			}
 
 			items[i].state = ITEM_STATE_NORMAL;
+			//todo: send to correct preprocessor
 			zbx_preprocess_item_value(items[i].itemid, items[i].value_type, 0, &value, ts, items[i].state,
-					NULL);
+					NULL,0);
 
 			free_result(&value);
 		}
@@ -1181,7 +1183,8 @@ httptest_error:
 
 	zbx_free(buffer);
 	zbx_free(err_str);
-	zbx_preprocessor_flush();
+	//todo: fix to send to correct preprocessor
+	zbx_preprocessor_flush(0);
 
 	zabbix_log(LOG_LEVEL_DEBUG, "End of %s()", __function_name);
 }
