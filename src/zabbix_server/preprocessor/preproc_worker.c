@@ -29,6 +29,9 @@
 #include "preproc_worker.h"
 #include "item_preproc.h"
 
+
+//#define IDX process_num % ZBX_PREPROCESSING_FORKS
+
 extern unsigned char	process_type, program_type;
 extern int		server_num, process_num;
 
@@ -115,7 +118,7 @@ ZBX_THREAD_ENTRY(preprocessing_worker_thread, args)
 	char			*error = NULL;
 	zbx_ipc_socket_t	socket;
 	zbx_ipc_message_t	message;
-	char 			*socket_name;
+	char 			socket_name[MAX_STRING_LEN];
 
 	process_type = ((zbx_thread_args_t *)args)->process_type;
 	server_num = ((zbx_thread_args_t *)args)->server_num;
@@ -125,13 +128,11 @@ ZBX_THREAD_ENTRY(preprocessing_worker_thread, args)
 
 	zbx_ipc_message_init(&message);
 
-	if (process_num % 2) 
-	    socket_name=ZBX_IPC_SERVICE_PREPROCESSING_WORKER1;
-	else socket_name=ZBX_IPC_SERVICE_PREPROCESSING_WORKER2;
+	zbx_snprintf(socket_name,MAX_STRING_LEN,"%s%d",ZBX_IPC_SERVICE_PREPROCESSING_WORKER,IDX);
 
 	if (FAIL == zbx_ipc_socket_open(&socket, socket_name, 10, &error))
 	{
-		zabbix_log(LOG_LEVEL_CRIT, "cannot connect to preprocessing service: %s", error);
+		zabbix_log(LOG_LEVEL_CRIT, "cannot connect to preprocessing service: %s, socket:  %s", error,socket_name);
 		zbx_free(error);
 		exit(EXIT_FAILURE);
 	}
@@ -148,7 +149,8 @@ ZBX_THREAD_ENTRY(preprocessing_worker_thread, args)
 
 	for (;;)
 	{
-		zbx_handle_log();
+		//WTF???? Aren't there any place better to handle log rotation with blocking ?
+		//zbx_handle_log();
 
 		update_selfmon_counter(ZBX_PROCESS_STATE_IDLE);
 

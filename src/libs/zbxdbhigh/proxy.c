@@ -2398,7 +2398,7 @@ static int	process_history_data_value(DC_ITEM *item, zbx_agent_value_t *value)
 
 		item->state = ITEM_STATE_NOTSUPPORTED;
 		zbx_preprocess_item_value(item->itemid, item->value_type, item->flags, NULL, &value->ts, item->state,
-				value->value);
+				value->value,0);
 	}
 	else
 	{
@@ -2445,7 +2445,7 @@ static int	process_history_data_value(DC_ITEM *item, zbx_agent_value_t *value)
 
 		item->state = ITEM_STATE_NORMAL;
 		zbx_preprocess_item_value(item->itemid, item->value_type, item->flags, &result, &value->ts, item->state,
-				NULL);
+				NULL,0);
 
 		free_result(&result);
 	}
@@ -2497,7 +2497,7 @@ int	process_history_data(DC_ITEM *items, zbx_agent_value_t *values, int *errcode
 	if (0 < processed_num)
 		zbx_dc_items_update_nextcheck(items, values, errcodes, values_num);
 
-	zbx_preprocessor_flush();
+	zbx_preprocessor_flush(0);
 
 	zabbix_log(LOG_LEVEL_DEBUG, "End of %s() processed:%d", __function_name, processed_num);
 

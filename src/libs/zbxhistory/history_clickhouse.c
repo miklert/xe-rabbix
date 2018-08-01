@@ -47,7 +47,7 @@
 //const char	*value_type_str[] = {"dbl", "str", "log", "uint", "text"};
 
 extern char	*CONFIG_HISTORY_STORAGE_URL;
-
+extern char 	*CONFIG_HISTORY_STORAGE_TABLE_NAME;
 typedef struct
 {
 	char	*base_url;
@@ -534,7 +534,7 @@ static int	clickhouse_get_values(zbx_history_iface_t *hist, zbx_uint64_t itemid,
 	
 	zbx_history_record_t	hr;
 
-	zabbix_log(LOG_LEVEL_DEBUG, "received from clickhouse: %s", page.data);
+	zabbix_log(LOG_LEVEL_DEBUG, "recieved from clickhouse: %s", page.data);
 		
 	
 	char *end_str;
@@ -547,7 +547,7 @@ static int	clickhouse_get_values(zbx_history_iface_t *hist, zbx_uint64_t itemid,
 
 	    while (line_ptr != NULL)
 	    {
-		zabbix_log(LOG_LEVEL_DEBUG, "Parcing line '%s'", line_ptr);
+		zabbix_log(LOG_LEVEL_DEBUG, "Parsing line '%s'", line_ptr);
 
 		char *end_field;
 		char *field_ptr = strtok_r(line_ptr, "\t", &end_field);
@@ -658,7 +658,7 @@ static int	clickhouse_add_values(zbx_history_iface_t *hist, const zbx_vector_ptr
 	zabbix_log(LOG_LEVEL_DEBUG, "In %s()", __function_name);
 	
 
-	zbx_snprintf_alloc(&tmp_buffer,&tmp_alloc,&tmp_offset,"%s","INSERT INTO zabbix.history_buffer VALUES ");
+	zbx_snprintf_alloc(&tmp_buffer,&tmp_alloc,&tmp_offset,"INSERT INTO %s VALUES ", CONFIG_HISTORY_STORAGE_TABLE_NAME );
 
 	for (i = 0; i < history->values_num; i++)
 	{
@@ -670,14 +670,20 @@ static int	clickhouse_add_values(zbx_history_iface_t *hist, const zbx_vector_ptr
 		
 		 if (ITEM_VALUE_TYPE_UINT64 == h->value_type) {
 		    //zabbix_log(LOG_LEVEL_DEBUG, "Parsing value as UIN64 type");
-		    zbx_snprintf_alloc(&tmp_buffer,&tmp_alloc,&tmp_offset,"(CAST(%d as date) ,%d,%d,%d,%ld,0),",
+		    zbx_snprintf_alloc(&tmp_buffer,&tmp_alloc,&tmp_offset,"(CAST(%d as date) ,%d,%d,%d,%ld,0,''),",
 					h->ts.sec,h->itemid,h->ts.sec,h->ts.ns,h->value.ui64);
 		}
 
 		 if (ITEM_VALUE_TYPE_FLOAT == h->value_type) {
 		    //zabbix_log(LOG_LEVEL_DEBUG, "Parsing value as float type");
-		    zbx_snprintf_alloc(&tmp_buffer,&tmp_alloc,&tmp_offset,"(CAST(%d as date) ,%d,%d,%d,0,%f),",
+		    zbx_snprintf_alloc(&tmp_buffer,&tmp_alloc,&tmp_offset,"(CAST(%d as date) ,%d,%d,%d,0,%f,''),",
 					h->ts.sec,h->itemid,h->ts.sec,h->ts.ns,h->value.dbl);
+		}
+
+		 if (ITEM_VALUE_TYPE_STR == h->value_type) {
+		    //zabbix_log(LOG_LEVEL_DEBUG, "Parsing value as float type");
+		    zbx_snprintf_alloc(&tmp_buffer,&tmp_alloc,&tmp_offset,"(CAST(%d as date) ,%d,%d,%d,0,0,'%s'),",
+					h->ts.sec,h->itemid,h->ts.sec,h->ts.ns,h->value.str);
 		}
 
 		if (ITEM_VALUE_TYPE_LOG == h->value_type)

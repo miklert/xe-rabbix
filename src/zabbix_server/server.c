@@ -60,6 +60,7 @@
 #include "taskmanager/taskmanager.h"
 #include "preprocessor/preproc_manager.h"
 #include "preprocessor/preproc_worker.h"
+#include "preprocessor/preprocessing.h"
 #include "events.h"
 #include "valuecache.h"
 #include "setproctitle.h"
@@ -147,7 +148,6 @@ int	CONFIG_DISCOVERER_FORKS		= 1;
 int	CONFIG_HOUSEKEEPER_FORKS	= 1;
 int	CONFIG_PINGER_FORKS		= 1;
 int	CONFIG_POLLER_FORKS		= 5;
-//int	CONFIG_UNREACHABLE_POLLER_FORKS	= 1;
 int	CONFIG_HTTPPOLLER_FORKS		= 1;
 int	CONFIG_IPMIPOLLER_FORKS		= 0;
 int	CONFIG_TIMER_FORKS		= 1;
@@ -164,7 +164,7 @@ int	CONFIG_ACTIVE_FORKS		= 0;
 int	CONFIG_TASKMANAGER_FORKS	= 1;
 int	CONFIG_IPMIMANAGER_FORKS	= 0;
 int	CONFIG_ALERTMANAGER_FORKS	= 1;
-int	CONFIG_PREPROCMAN_FORKS		= 2;
+int	CONFIG_PREPROCMAN_FORKS		= ZBX_PREPROCESSING_FORKS;
 int	CONFIG_PREPROCESSOR_FORKS	= 6;
 
 int	CONFIG_LISTEN_PORT		= ZBX_DEFAULT_SERVER_PORT;
@@ -261,6 +261,7 @@ char	*CONFIG_SOCKET_PATH		= NULL;
 char	*CONFIG_HISTORY_STORAGE_URL	= NULL;
 char	*CONFIG_HISTORY_STORAGE_OPTS	= NULL;
 char	*CONFIG_HISTORY_STORAGE_TYPE	= NULL;
+char	*CONFIG_HISTORY_STORAGE_TABLE_NAME	= NULL;
 
 int	get_process_info_by_thread(int local_server_num, unsigned char *local_process_type, int *local_process_num);
 
@@ -358,11 +359,6 @@ int	get_process_info_by_thread(int local_server_num, unsigned char *local_proces
 		*local_process_type = ZBX_PROCESS_TYPE_POLLER;
 		*local_process_num = local_server_num - server_count + CONFIG_POLLER_FORKS;
 	}
-//	else if (local_server_num <= (server_count += CONFIG_UNREACHABLE_POLLER_FORKS))
-//	{
-//		*local_process_type = ZBX_PROCESS_TYPE_UNREACHABLE;
-//		*local_process_num = local_server_num - server_count + CONFIG_UNREACHABLE_POLLER_FORKS;
-//	}
 	else if (local_server_num <= (server_count += CONFIG_TRAPPER_FORKS))
 	{
 		*local_process_type = ZBX_PROCESS_TYPE_TRAPPER;
@@ -468,13 +464,6 @@ static void	zbx_validate_config(ZBX_TASK_EX *task)
 {
 	int	err = 0;
 
-//	if (0 == CONFIG_UNREACHABLE_POLLER_FORKS && 0 != CONFIG_POLLER_FORKS + CONFIG_JAVAPOLLER_FORKS)
-//	{
-//		zabbix_log(LOG_LEVEL_CRIT, "\"StartPollersUnreachable\" configuration parameter must not be 0"
-//				" if regular or Java pollers are started");
-//		err = 1;
-//	}
-
 	if ((NULL == CONFIG_JAVA_GATEWAY || '\0' == *CONFIG_JAVA_GATEWAY) && 0 < CONFIG_JAVAPOLLER_FORKS)
 	{
 		zabbix_log(LOG_LEVEL_CRIT, "\"JavaGateway\" configuration parameter is not specified or empty");
@@ -501,7 +490,9 @@ static void	zbx_validate_config(ZBX_TASK_EX *task)
 	err |= (FAIL == check_cfg_feature_str("SSLCertLocation", CONFIG_SSL_CERT_LOCATION, "cURL library"));
 	err |= (FAIL == check_cfg_feature_str("SSLKeyLocation", CONFIG_SSL_KEY_LOCATION, "cURL library"));
 	err |= (FAIL == check_cfg_feature_str("HistoryStorageURL", CONFIG_HISTORY_STORAGE_URL, "cURL library"));
+
 	err |= (FAIL == check_cfg_feature_str("HistoryStorageTypes", CONFIG_HISTORY_STORAGE_OPTS, "cURL library"));
+	err |= (FAIL == check_cfg_feature_str("HistoryStorageTable", CONFIG_HISTORY_STORAGE_TABLE_NAME, "cURL library"));
 #endif
 
 #if !defined(HAVE_LIBXML2) || !defined(HAVE_LIBCURL)
@@ -559,8 +550,6 @@ static void	zbx_load_config(ZBX_TASK_EX *task)
 			PARM_OPT,	0,			1000},
 		{"StartPollers",		&CONFIG_POLLER_FORKS,			TYPE_INT,
 			PARM_OPT,	0,			1000},
-//		{"StartPollersUnreachable",	&CONFIG_UNREACHABLE_POLLER_FORKS,	TYPE_INT,
-//			PARM_OPT,	0,			1000},
 		{"StartIPMIPollers",		&CONFIG_IPMIPOLLER_FORKS,		TYPE_INT,
 			PARM_OPT,	0,			1000},
 		{"StartTimers",			&CONFIG_TIMER_FORKS,			TYPE_INT,
@@ -698,6 +687,8 @@ static void	zbx_load_config(ZBX_TASK_EX *task)
 		{"HistoryStorageTypes",		&CONFIG_HISTORY_STORAGE_OPTS,		TYPE_STRING_LIST,
 			PARM_OPT,	0,			0},
 		{"HistoryStorageType",		&CONFIG_HISTORY_STORAGE_TYPE,		TYPE_STRING,
+			PARM_OPT,	0,			0},
+		{"HistoryStorageTableName",	&CONFIG_HISTORY_STORAGE_TABLE_NAME,		TYPE_STRING,
 			PARM_OPT,	0,			0},
 
 		{NULL}
@@ -916,7 +907,8 @@ int	MAIN_ZABBIX_ENTRY(int flags)
 	zabbix_log(LOG_LEVEL_INFORMATION, "VMware monitoring:         " VMWARE_FEATURE_STATUS);
 	zabbix_log(LOG_LEVEL_INFORMATION, "SMTP authentication:       " SMTP_AUTH_FEATURE_STATUS);
 	zabbix_log(LOG_LEVEL_INFORMATION, "Jabber notifications:      " JABBER_FEATURE_STATUS);
-	zabbix_log(LOG_LEVEL_INFORMATION, "Ez Texting notifications:  " LIBCURL_FEATURE_STATUS);
+//i am better of seeng message if curl is compiled, then an AD about Ez
+	zabbix_log(LOG_LEVEL_INFORMATION, "CURL libriaries:  " LIBCURL_FEATURE_STATUS);
 	zabbix_log(LOG_LEVEL_INFORMATION, "ODBC:                      " ODBC_FEATURE_STATUS);
 	zabbix_log(LOG_LEVEL_INFORMATION, "SSH2 support:              " SSH2_FEATURE_STATUS);
 	zabbix_log(LOG_LEVEL_INFORMATION, "IPv6 support:              " IPV6_FEATURE_STATUS);
@@ -1016,7 +1008,6 @@ int	MAIN_ZABBIX_ENTRY(int flags)
 		CONFIG_IPMIMANAGER_FORKS = 1;
 
 	threads_num = CONFIG_CONFSYNCER_FORKS + CONFIG_POLLER_FORKS
-//			+ CONFIG_UNREACHABLE_POLLER_FORKS 
 			+ CONFIG_TRAPPER_FORKS + CONFIG_PINGER_FORKS
 			+ CONFIG_ALERTER_FORKS + CONFIG_HOUSEKEEPER_FORKS + CONFIG_TIMER_FORKS
 			+ CONFIG_HTTPPOLLER_FORKS + CONFIG_DISCOVERER_FORKS + CONFIG_HISTSYNCER_FORKS
@@ -1064,11 +1055,6 @@ int	MAIN_ZABBIX_ENTRY(int flags)
 				thread_args.args = &poller_type;
 				threads[i] = zbx_thread_start(poller_thread, &thread_args);
 				break;
-//			case ZBX_PROCESS_TYPE_UNREACHABLE:
-//				poller_type = ZBX_PROCESS_TYPE_UNREACHABLE;
-//				thread_args.args = &poller_type;
-//				threads[i] = zbx_thread_start(poller_thread, &thread_args);
-//				break;
 			case ZBX_PROCESS_TYPE_TRAPPER:
 				thread_args.args = &listen_sock;
 				threads[i] = zbx_thread_start(trapper_thread, &thread_args);

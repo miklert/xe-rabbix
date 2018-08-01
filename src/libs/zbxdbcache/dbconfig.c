@@ -41,9 +41,12 @@
 
 extern ZBX_MUTEX	queue_lock[ZBX_POLLER_TYPE_COUNT][ZBX_POLLER_QUEUES_PER_POLLER_TYPE];
 static int	sync_in_progress = 0;
+//todo: lock all the queuses either
+//#define	LOCK_CACHE	if (0 == sync_in_progress) zbx_mutex_lock(&config_lock)
+#define	LOCK_CACHE	DC_global_cfg_lock()
+//#define	UNLOCK_CACHE	if (0 == sync_in_progress) zbx_mutex_unlock(&config_lock)
+#define	UNLOCK_CACHE	DC_global_cfg_unlock()
 
-#define	LOCK_CACHE	if (0 == sync_in_progress) zbx_mutex_lock(&config_lock)
-#define	UNLOCK_CACHE	if (0 == sync_in_progress) zbx_mutex_unlock(&config_lock)
 #define START_SYNC	LOCK_CACHE; sync_in_progress = 1
 #define FINISH_SYNC	sync_in_progress = 0; UNLOCK_CACHE
 
@@ -70,6 +73,34 @@ static int	sync_in_progress = 0;
 #define DCin_maintenance_without_data_collection(dc_host, dc_item)			\
 		in_maintenance_without_data_collection(dc_host->maintenance_status,	\
 				dc_host->maintenance_type, dc_item->type)
+void DC_global_cfg_lock() 
+{
+	ZBX_MUTEX mutex_num;
+	ZBX_MUTEX config_mutex=ZBX_MUTEX_CONFIG;
+
+	zbx_mutex_lock(&config_mutex);
+
+	for ( mutex_num = ZBX_MUTEX_QUEUE_BASE; mutex_num<ZBX_MUTEX_QUEUE_BASE+ZBX_POLLER_QUEUES_PER_POLLER_TYPE*ZBX_POLLER_TYPE_COUNT;mutex_num++) {
+//		zabbix_log(LOG_LEVEL_INFORMATION, "GLOBAL LOCK LOCKING mutex %d",mutex_num);
+		zbx_mutex_lock(&mutex_num);
+	}
+}
+
+
+void DC_global_cfg_unlock()
+{
+	ZBX_MUTEX mutex_num;
+	ZBX_MUTEX config_mutex=ZBX_MUTEX_CONFIG;
+
+	zbx_mutex_unlock(&config_mutex);
+
+	for (mutex_num=ZBX_MUTEX_QUEUE_BASE; mutex_num<ZBX_MUTEX_QUEUE_BASE+ZBX_POLLER_QUEUES_PER_POLLER_TYPE*ZBX_POLLER_TYPE_COUNT;mutex_num++) {
+		zbx_mutex_unlock(&mutex_num);
+//		zabbix_log(LOG_LEVEL_INFORMATION, "GLOBAL LOCK UNLOCKING mutex %d",mutex_num);
+	}
+
+}
+
 
 /******************************************************************************
  *                                                                            *
@@ -5253,7 +5284,7 @@ int	init_configuration_cache(char **error)
 {
 	const char	*__function_name = "init_configuration_cache";
 
-	int		i,k, ret;
+	int		i,k, ret,mutex_count=0;
 	size_t		config_size;
 	size_t		strpool_size;
 
@@ -5264,6 +5295,15 @@ int	init_configuration_cache(char **error)
 
 	if (SUCCEED != (ret = zbx_mutex_create(&config_lock, ZBX_MUTEX_CONFIG, error)))
 		goto out;
+
+	for( i=0; i< ZBX_POLLER_TYPE_COUNT; i++) 
+	    for ( k=0; k< ZBX_POLLER_QUEUES_PER_POLLER_TYPE; k++) {
+		queue_lock[i][k]=ZBX_MUTEX_NULL;
+		if (SUCCEED != (ret = zbx_mutex_create(&queue_lock[i][k], ZBX_MUTEX_QUEUE_BASE + mutex_count, error)))
+		    goto out;
+//		zabbix_log(LOG_LEVEL_INFORMATION, "In %s(): created mutex %d addr is %d", __function_name,  ZBX_MUTEX_QUEUE_BASE + mutex_count, queue_lock[i][k]);
+		mutex_count++;
+	}
 
 	if (SUCCEED != (ret = zbx_mem_create(&config_mem, config_size, "configuration cache", "CacheSize", 0, error)))
 		goto out;
@@ -7135,9 +7175,9 @@ int	DCconfig_get_poller_items(unsigned char poller_type, unsigned int process_nu
 			max_items = 1;
 	}
 	mutex_num=ZBX_MUTEX_QUEUE_BASE+poller_type*ZBX_POLLER_QUEUES_PER_POLLER_TYPE+QPIDX;
-	zabbix_log(LOG_LEVEL_INFORMATION, "In %s() poller_type:%d  locking mutex num %d  (queue %d)", __function_name, poller_type, mutex_num, QPIDX);
+//	zabbix_log(LOG_LEVEL_INFORMATION, "In %s() poller_type:%d  locking mutex num %d  (queue %d)", __function_name, poller_type, mutex_num, QPIDX);
 	LOCK_QUEUE;
-	zabbix_log(LOG_LEVEL_INFORMATION, "In %s() poller_type:%d  locked mutex num %d  (queue %d)", __function_name, poller_type, mutex_num, QPIDX);
+//	zabbix_log(LOG_LEVEL_INFORMATION, "In %s() poller_type:%d  locked mutex num %d  (queue %d)", __function_name, poller_type, mutex_num, QPIDX);
 
 	while (num < max_items && FAIL == zbx_binary_heap_empty(queue))
 	{
@@ -7242,7 +7282,7 @@ int	DCconfig_get_poller_items(unsigned char poller_type, unsigned int process_nu
 //		}
 	}
 
-	zabbix_log(LOG_LEVEL_INFORMATION, "In %s() poller_type:%d  Unlocking mutex num %d  (queue %d)", __function_name, poller_type, mutex_num, QPIDX);
+//	zabbix_log(LOG_LEVEL_INFORMATION, "In %s() poller_type:%d  Unlocking mutex num %d  (queue %d)", __function_name, poller_type, mutex_num, QPIDX);
 	UNLOCK_QUEUE;
 
 //	zabbix_log(LOG_LEVEL_INFORMATION, "End of %s():%d", __function_name, num);
@@ -7333,7 +7373,7 @@ int	DCconfig_get_ipmi_poller_items(int now, DC_ITEM *items, int items_num, int *
 	}
 	*nextcheck = dc_config_get_queue_nextcheck(&config->queues[ZBX_POLLER_TYPE_IPMI][QPIDX]);
 
-	zabbix_log(LOG_LEVEL_INFORMATION, "In %s(): unlocking queue %d, num is %d ", __function_name, QPIDX, num);
+//	zabbix_log(LOG_LEVEL_INFORMATION, "In %s(): unlocking queue %d, num is %d ", __function_name, QPIDX, num);
 	UNLOCK_QUEUE;
 
 	zabbix_log(LOG_LEVEL_DEBUG, "End of %s():%d", __function_name, num);
@@ -7582,14 +7622,14 @@ void	DCpoller_requeue_items(const DC_ITEM *items, const int lastclock,
 		const int *errcodes, size_t num, unsigned char poller_type, unsigned int process_num)
 {	unsigned int mutex_num=ZBX_MUTEX_QUEUE_BASE+poller_type*ZBX_POLLER_QUEUES_PER_POLLER_TYPE+QPIDX;
 
-	zabbix_log(LOG_LEVEL_INFORMATION, "In DCpoller_requeue_items (poller_type:%d,queue:%d,mutex: %d) Locking mutex" ,poller_type,QPIDX,mutex_num);
+//	zabbix_log(LOG_LEVEL_INFORMATION, "In DCpoller_requeue_items (poller_type:%d,queue:%d,mutex: %d) Locking mutex" ,poller_type,QPIDX,mutex_num);
 	LOCK_QUEUE;
-	zabbix_log(LOG_LEVEL_INFORMATION, "In DCpoller_requeue_items (poller_type:%d,queue:%d,mutex: %d) Locked mutex" ,poller_type,QPIDX,mutex_num);
+//	zabbix_log(LOG_LEVEL_INFORMATION, "In DCpoller_requeue_items (poller_type:%d,queue:%d,mutex: %d) Locked mutex" ,poller_type,QPIDX,mutex_num);
 
 	dc_requeue_items2(items, lastclock, errcodes, num);
 //	*nextcheck = dc_config_get_queue_nextcheck(&config->queues[poller_type][QPIDX]);
 
-	zabbix_log(LOG_LEVEL_INFORMATION, "In DCpoller_requeue_items (poller_type:%d,queue:%d,mutex: %d) UNlocking mutex" ,poller_type,QPIDX,mutex_num);
+//	zabbix_log(LOG_LEVEL_INFORMATION, "In DCpoller_requeue_items (poller_type:%d,queue:%d,mutex: %d) UNlocking mutex" ,poller_type,QPIDX,mutex_num);
 	UNLOCK_QUEUE;
 }
 

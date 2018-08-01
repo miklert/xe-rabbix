@@ -31,6 +31,9 @@
 #define PACKED_FIELD_STRING	1
 #define MAX_VALUES_LOCAL	256
 
+
+
+
 /* packed field data description */
 typedef struct
 {
@@ -43,11 +46,21 @@ zbx_packed_field_t;
 #define PACKED_FIELD(value, size)	\
 		(zbx_packed_field_t){(value), (size), (0 == (size) ? PACKED_FIELD_STRING : PACKED_FIELD_RAW)};
 
-zbx_ipc_message_t cached_message1= (zbx_ipc_message_t){0, 0, NULL};
-zbx_ipc_message_t cached_message2= (zbx_ipc_message_t){0, 0, NULL};
+zbx_ipc_message_t	cached_messages[ZBX_PREPROCESSING_FORKS];
+int	cached_values[ZBX_PREPROCESSING_FORKS];
 
-int cached_values1	= 0;
-int cached_values2	= 0;
+//char	socket_names[ZBX_PREPROCESSING_FORKS][MAX_STRING_LEN];
+
+
+
+
+void preprocessor_init_cache(unsigned int process_num)
+{
+	cached_messages[IDX]=(zbx_ipc_message_t){0, 0, NULL};
+	cached_values[IDX]=0;
+//	zbx_snprintf(socket_names[IDX],MAX_STRING_LEN,"%s%d",ZBX_IPC_SERVICE_PREPROCESSING,IDX);
+}
+
 
 /******************************************************************************
  *                                                                            *
@@ -112,6 +125,7 @@ static zbx_uint32_t	message_pack_data(zbx_ipc_message_t *message, zbx_packed_fie
 
 	return data_size;
 }
+
 
 /******************************************************************************
  *                                                                            *
@@ -612,17 +626,19 @@ static void	preprocessor_send(zbx_uint32_t code, unsigned char *data, zbx_uint32
 		zbx_ipc_message_t *response, unsigned int process_num)
 {
 	char			*error = NULL;
+	char			socket_name[MAX_STRING_LEN];
 	static zbx_ipc_socket_t	socket = {0};
-	char * socket_name;
 
-	if (process_num %2) socket_name=ZBX_IPC_SERVICE_PREPROCESSING1;
-	    else socket_name=ZBX_IPC_SERVICE_PREPROCESSING2;
 	/* each process has a permanent connection to preprocessing manager */
-	if (0 == socket.fd && FAIL == zbx_ipc_socket_open(&socket, socket_name, SEC_PER_MIN,
+	if (0 == socket.fd) {
+	    //generating socket name first as workers might start first sometimes
+	    zbx_snprintf(socket_name,MAX_STRING_LEN,"%s%d",ZBX_IPC_SERVICE_PREPROCESSING,IDX);
+	    if (FAIL == zbx_ipc_socket_open(&socket, socket_name, SEC_PER_MIN,
 			&error))
-	{
-		zabbix_log(LOG_LEVEL_CRIT, "cannot connect to preprocessing service: %s", error);
-		exit(EXIT_FAILURE);
+		{
+			zabbix_log(LOG_LEVEL_CRIT, "cannot connect to preprocessing service: %s socket %s", error, socket_name);
+			exit(EXIT_FAILURE);
+		}
 	}
 
 	if (FAIL == zbx_ipc_socket_write(&socket, code, data, size))
@@ -682,21 +698,10 @@ void	zbx_preprocess_item_value(zbx_uint64_t itemid, unsigned char item_value_typ
 	value.state = state;
 	value.ts = ts;
 
-	if (i) 
-	{ 
-		preprocessor_pack_value(&cached_message1, &value);
-		cached_values1++;
-		if (MAX_VALUES_LOCAL < cached_values1)
-			zbx_preprocessor_flush(i);
-
-	}
-	else
-	{  
-		preprocessor_pack_value(&cached_message2, &value);
-		cached_values2++;
-		if (MAX_VALUES_LOCAL < cached_values2)
-			zbx_preprocessor_flush(i);
-	}
+	preprocessor_pack_value(&cached_messages[IDX], &value);
+	cached_values[IDX]++;
+	if (MAX_VALUES_LOCAL < cached_values[IDX])
+		zbx_preprocessor_flush(IDX);
 
 out:
 	zabbix_log(LOG_LEVEL_DEBUG, "End of %s()", __function_name);
@@ -711,28 +716,14 @@ out:
  ******************************************************************************/
 void	zbx_preprocessor_flush(unsigned int process_num)
 {
-	if (process_num %2) {
-		if (0 < cached_message1.size)
-		{
-			preprocessor_send(ZBX_IPC_PREPROCESSOR_REQUEST, cached_message1.data, cached_message1.size, NULL,process_num);
-
-			zbx_ipc_message_clean(&cached_message1);
-			zbx_ipc_message_init(&cached_message1);
-			cached_values1 = 0;
-		}
-	} else {
-		if (0 < cached_message2.size)
-		{
-			preprocessor_send(ZBX_IPC_PREPROCESSOR_REQUEST, cached_message2.data, cached_message2.size, NULL, process_num);
-
-			zbx_ipc_message_clean(&cached_message2);
-			zbx_ipc_message_init(&cached_message2);
-			cached_values2 = 0;
-		}
-
-
-
+	if (0 < cached_messages[IDX].size)
+	{
+		preprocessor_send(ZBX_IPC_PREPROCESSOR_REQUEST, cached_messages[IDX].data, cached_messages[IDX].size, NULL, process_num);
+		zbx_ipc_message_clean(&cached_messages[IDX]);
+		zbx_ipc_message_init(&cached_messages[IDX]);
+		cached_values[IDX] = 0;
 	}
+
 }
 
 /******************************************************************************
@@ -749,22 +740,16 @@ zbx_uint64_t	zbx_preprocessor_get_queue_size(void)
 	zbx_uint64_t		size;
 	zbx_uint64_t		total_size;
 	zbx_ipc_message_t	message;
+	int		i;
 	
-
-	zbx_ipc_message_init(&message);
-	preprocessor_send(ZBX_IPC_PREPROCESSOR_QUEUE, NULL, 0, &message, 1);
-	memcpy(&size, message.data, sizeof(zbx_uint64_t));
-	zbx_ipc_message_clean(&message);
-	total_size+=size;
-
-
-	zbx_ipc_message_init(&message);
-	preprocessor_send(ZBX_IPC_PREPROCESSOR_QUEUE, NULL, 0, &message, 2);
-	memcpy(&size, message.data, sizeof(zbx_uint64_t));
-	zbx_ipc_message_clean(&message);
-	total_size+=size;
-
-
+	for ( i=0; i<ZBX_PREPROCESSING_FORKS; i++ ) 
+	{
+	    zbx_ipc_message_init(&message);
+	    preprocessor_send(ZBX_IPC_PREPROCESSOR_QUEUE, NULL, 0, &message, i);
+	    memcpy(&size, message.data, sizeof(zbx_uint64_t));
+	    zbx_ipc_message_clean(&message);
+	    total_size+=size;
+	}
 
 	return total_size;
 }

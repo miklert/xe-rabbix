@@ -3483,22 +3483,12 @@ int	init_database_cache(char **error)
 {
 	const char	*__function_name = "init_database_cache";
 
-	int		i,k,ret,mutex_count=0;
+	int		i,k,ret;
 
 	zabbix_log(LOG_LEVEL_DEBUG, "In %s()", __function_name);
     
 	if (SUCCEED != (ret = zbx_mutex_create(&cache_lock, ZBX_MUTEX_CACHE, error)))
 		goto out;
-
-	
-	for( i=0; i< ZBX_POLLER_TYPE_COUNT; i++) 
-	    for ( k=0; k< ZBX_POLLER_QUEUES_PER_POLLER_TYPE; k++) {
-		queue_lock[i][k]=ZBX_MUTEX_NULL;
-		if (SUCCEED != (ret = zbx_mutex_create(&queue_lock[i][k], ZBX_MUTEX_QUEUE_BASE + mutex_count, error)))
-		    goto out;
-		zabbix_log(LOG_LEVEL_DEBUG, "In %s(): created mutex %d addr is %d", __function_name,  ZBX_MUTEX_QUEUE_BASE + mutex_count, queue_lock[i][k]);
-		mutex_count++;
-	}
 
 	if (SUCCEED != (ret = zbx_mutex_create(&cache_ids_lock, ZBX_MUTEX_CACHE_IDS, error)))
 		goto out;

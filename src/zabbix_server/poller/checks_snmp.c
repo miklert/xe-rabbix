@@ -2095,13 +2095,17 @@ int async_submit_result (int status, struct snmp_session *sp, struct snmp_pdu *r
 
   struct variable_list *var;
 
+  
+  zabbix_log(LOG_LEVEL_DEBUG, "In: %s() started ",__function_name);
+
 
   switch (status) {
 	case STAT_SUCCESS:
 		var = response->variables;
-
-		if (response->errstat == SNMP_ERR_NOERROR) 
+		 zabbix_log(LOG_LEVEL_DEBUG, "In: %s() stat_success %d",__function_name,response->errstat);
+		if (SNMP_ERR_NOERROR == response->errstat) 
 		{
+			 zabbix_log(LOG_LEVEL_DEBUG, "In: %s() before while ",__function_name);
 			while (var) 
 			{
 				zabbix_log(LOG_LEVEL_DEBUG, "%s() calling zbx_snmp_set_result ",__function_name);
@@ -2110,7 +2114,7 @@ int async_submit_result (int status, struct snmp_session *sp, struct snmp_pdu *r
 			}
 		} else 
 		{
-			zabbix_log(LOG_LEVEL_DEBUG, "%s() there was an error in SNMP responce from %s",__function_name,sp->peername);
+			zabbix_log(LOG_LEVEL_DEBUG, "%s() there was an error in SNMP responce from the host",__function_name);
 		}
 		return 1;
 
@@ -2155,7 +2159,7 @@ int asynch_response(int operation, struct snmp_session *sp, int reqid,
 		    struct snmp_pdu *pdu, void *magic)
 {
 
-	const char	*__function_name = "async_response";
+	const char	*__function_name = "asynch_response";
 
 	struct async_snmp_session *sess = (struct async_snmp_session *)magic;
 	struct async_snmp_conf *conf=sess->conf;
@@ -2164,6 +2168,7 @@ int asynch_response(int operation, struct snmp_session *sp, int reqid,
 	zbx_uint64_t	prev_hostid;
 
 	prev_hostid=conf->items[sess->current_item].host.hostid;
+//	zabbix_log(LOG_LEVEL_INFORMATION, "In %s() callout hostid %d responce is %u", __function_name,prev_hostid,pdu);
 
 	if (operation != NETSNMP_CALLBACK_OP_RECEIVED_MESSAGE) {
 		//we've got the timeout situation
@@ -2179,7 +2184,7 @@ int asynch_response(int operation, struct snmp_session *sp, int reqid,
 
 	//	zabbix_log(LOG_LEVEL_INFORMATION, "In %s() SNMP message timed out for hostid %d, fail count is %d sess id is %d", __function_name,prev_hostid,sess->snmp_fails,magic);
 	
-		if (sess->snmp_fails >= SNMP_MAX_HOST_FAILS) {
+	//	if (sess->snmp_fails >= SNMP_MAX_HOST_FAILS) {
 	//		zabbix_log(LOG_LEVEL_INFORMATION, "Disabling rest items for host %d",prev_hostid);
 
 	//		sess->current_item++;
@@ -2196,7 +2201,7 @@ int asynch_response(int operation, struct snmp_session *sp, int reqid,
 			//finishing the host's items processing
 			conf->active_hosts--;
 			return 1;
-		} 
+	//	} 
 	} else {
 		async_submit_result(STAT_SUCCESS, sess->sess, pdu, &conf->results[sess->current_item]);
 		conf->errcodes[sess->current_item]=SUCCEED;
@@ -2207,7 +2212,7 @@ int asynch_response(int operation, struct snmp_session *sp, int reqid,
 	
 		
 			
-	//iterating to next snmp item in the list
+	//iterating to next snmp item in the list while processing the same host
 	//skipping any non-snmp type
 	sess->current_item++;
 	while (sess->current_item < sess->max_items ) {
@@ -2219,7 +2224,6 @@ int asynch_response(int operation, struct snmp_session *sp, int reqid,
 		zabbix_log(LOG_LEVEL_DEBUG, "In %s() skipping non-snmp item",__function_name);
 	}
 
-//	zabbix_log(LOG_LEVEL_INFORMATION, "In %s() hotid %d, curr item is %d max item is %d", __function_name,prev_hostid,sess->current_item,sess->max_items);
 
 	//checking if we're still in list 	
 	if(sess->current_item < sess->max_items) {
@@ -2228,10 +2232,10 @@ int asynch_response(int operation, struct snmp_session *sp, int reqid,
 		//and next item has the same hostid as the prev one
 		if (conf->items[sess->current_item].host.hostid == prev_hostid ) {
 			//then sending next oid query
-//			zabbix_log(LOG_LEVEL_INFORMATION, "In %s() the same host for hostid %d, fail count is %d sess id is %d", __function_name,prev_hostid,sess->snmp_fails,magic);
+			zabbix_log(LOG_LEVEL_DEBUG, "In %s() the same host for hostid %d, fail count is %d sess id is %d", __function_name,prev_hostid,sess->snmp_fails,magic);
 			if (conf->items[sess->current_item].snmp_oid) {
 
-//				zabbix_log(LOG_LEVEL_DEBUG, "In %s() Parsing oids and adding null vals", __function_name);
+				zabbix_log(LOG_LEVEL_DEBUG, "In %s() Parsing oids and adding null vals", __function_name);
 				conf->parsed_oid_lens[sess->current_item] = MAX_OID_LEN;
 
 				//oid translation

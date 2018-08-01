@@ -38,7 +38,7 @@ extern int		server_num, process_num, CONFIG_PREPROCESSOR_FORKS;
 #define ZBX_PREPROCESSING_MANAGER_DELAY	1
 //this must be big enough to hold buffer for occasional slowdownds, so 10-15 threads might submit data without stucking
 #define ZBX_PREPROCESSING_MAX_QUEUE_TRESHOLD 1000000
-
+//#define IDX process_num%ZBX_POLLER_QUEUES_PER_POLLER_TYPE
 
 #define ZBX_PREPROC_PRIORITY_NONE	0
 #define ZBX_PREPROC_PRIORITY_FIRST	1
@@ -1014,8 +1014,8 @@ ZBX_THREAD_ENTRY(preprocessing_manager_thread, args)
 	zbx_preprocessing_manager_t	manager;
 	int				ret;
 	double				time_stat, time_idle = 0, time_now, time_flush, time_file = 0;
-	char		*socket_preproc;
-	char		*socket_worker;
+	char		socket_preproc[MAX_STRING_LEN];
+	char		socket_worker[MAX_STRING_LEN];
 
 
 
@@ -1026,22 +1026,19 @@ ZBX_THREAD_ENTRY(preprocessing_manager_thread, args)
 	server_num = ((zbx_thread_args_t *)args)->server_num;
 	process_num = ((zbx_thread_args_t *)args)->process_num;
 
+
+	//todo: figure if it's thread safe to launch it
+	preprocessor_init_cache(process_num);
+
 	zbx_setproctitle("%s #%d starting", get_process_type_string(process_type), process_num);
 
 	zabbix_log(LOG_LEVEL_INFORMATION, "%s #%d started [%s #%d]", get_program_type_string(program_type),
 			server_num, get_process_type_string(process_type), process_num);
+	
+	zbx_snprintf(socket_preproc,MAX_STRING_LEN,"%s%d",ZBX_IPC_SERVICE_PREPROCESSING,IDX);
+	zbx_snprintf(socket_worker,MAX_STRING_LEN,"%s%d",ZBX_IPC_SERVICE_PREPROCESSING_WORKER,IDX);
 
-	if (process_num % 2)
-	{ 
-	    socket_preproc=ZBX_IPC_SERVICE_PREPROCESSING1;
-	    socket_worker=ZBX_IPC_SERVICE_PREPROCESSING_WORKER1;
-	}
-	else
-	{
-	    socket_preproc=ZBX_IPC_SERVICE_PREPROCESSING2;
-	    socket_worker=ZBX_IPC_SERVICE_PREPROCESSING_WORKER2;
-	}
-
+	//fix to correct socket name
 	if (FAIL == zbx_ipc_service_start(&service_requests, socket_preproc, &error))
 	{
 		zabbix_log(LOG_LEVEL_CRIT, "cannot start preprocessing service for requests: %s", error);
@@ -1088,13 +1085,13 @@ ZBX_THREAD_ENTRY(preprocessing_manager_thread, args)
 
 
 		if (manager.queued_num > ZBX_PREPROCESSING_MAX_QUEUE_TRESHOLD ) {
-			ret = zbx_ipc_service_recv(&service_results,1, &client, &message);
+			ret = zbx_ipc_service_recv(&service_results,0, &client, &message);
 			preprocessor_assign_tasks(&manager);
 			preprocessing_flush_queue(&manager);
 		} else {
-			ret = zbx_ipc_service_recv(&service_requests, 0, &client, &message);
+			ret = zbx_ipc_service_recv(&service_results, 0, &client, &message);
 			if (NULL==message)
-				ret = zbx_ipc_service_recv(&service_results, ZBX_PREPROCESSING_MANAGER_DELAY, &client, &message);
+				ret = zbx_ipc_service_recv(&service_requests, 0, &client, &message);
 		}
 
 		update_selfmon_counter(ZBX_PROCESS_STATE_BUSY);
@@ -1144,6 +1141,9 @@ ZBX_THREAD_ENTRY(preprocessing_manager_thread, args)
 			}
 
 			zbx_ipc_message_free(message);
+		} else {
+		    //we've got no message, lets sleep a bit
+		    usleep(1000);
 		}
 
 		if (NULL != client)

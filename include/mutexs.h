@@ -52,9 +52,7 @@
 #	define ZBX_MUTEX_PROCSTAT	12
 #	define ZBX_MUTEX_PROXY_HISTORY	13
 #	define ZBX_MUTEX_QUEUE_BASE		14
-
-
-#	define ZBX_MUTEX_COUNT		34
+#	define ZBX_MUTEX_COUNT		30
 
 #endif	/* _WINDOWS */
 

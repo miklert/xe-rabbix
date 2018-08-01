@@ -24,17 +24,20 @@
 #include "module.h"
 #include "dbcache.h"
 
-#define ZBX_IPC_SERVICE_PREPROCESSING1	"preprocessing1"
-#define ZBX_IPC_SERVICE_PREPROCESSING_WORKER1	"preprocessing_to_worker1"
+#define ZBX_IPC_SERVICE_PREPROCESSING	"preprocessing"
+#define ZBX_IPC_SERVICE_PREPROCESSING_WORKER	"preprocessing_to_worker"
 
-#define ZBX_IPC_SERVICE_PREPROCESSING2	"preprocessing2"
-#define ZBX_IPC_SERVICE_PREPROCESSING_WORKER2	"preprocessing_to_worker2"
+
 
 
 #define ZBX_IPC_PREPROCESSOR_WORKER	1
 #define ZBX_IPC_PREPROCESSOR_REQUEST	2
 #define ZBX_IPC_PREPROCESSOR_RESULT	3
 #define ZBX_IPC_PREPROCESSOR_QUEUE	4
+
+#define ZBX_PREPROCESSING_FORKS		4
+#define IDX process_num%ZBX_PREPROCESSING_FORKS
+
 
 /* item value data used in preprocessing manager */
 typedef struct
@@ -61,5 +64,6 @@ void	zbx_preprocessor_unpack_task(zbx_uint64_t *itemid, unsigned char *value_typ
 		int *steps_num, const unsigned char *data);
 void	zbx_preprocessor_unpack_result(zbx_variant_t *value, zbx_item_history_value_t **history_value,
 		char **error, const unsigned char *data);
+void	preprocessor_init_cache(unsigned int process_num);
 
 #endif /* ZABBIX_PREPROCESSING_H */
