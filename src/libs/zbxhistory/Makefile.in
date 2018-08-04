@@ -368,7 +368,7 @@ libzbxhistory_a_SOURCES = \
 	history.c history.h \
 	history_sql.c \
 	history_elastic.c \
-	istory_clickhouse.c
+	history_clickhouse.c
 
 all: all-am
 
