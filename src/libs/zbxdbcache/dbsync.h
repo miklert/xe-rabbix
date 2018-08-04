@@ -136,3 +136,5 @@ int	zbx_dbsync_compare_item_preprocs(zbx_dbsync_t *sync);
 
 
 #endif /* BUILD_SRC_LIBS_ZBXDBCACHE_DBSYNC_H_ */
+void DC_global_cfg_lock();
+void DC_global_cfg_unlock();

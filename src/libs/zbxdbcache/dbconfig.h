@@ -692,7 +692,4 @@ void	zbx_dc_get_hostids_by_functionids(const zbx_uint64_t *functionids, int func
 
 void	DCdump_configuration(ZBX_DC_CONFIG *config);
 
-void DC_global_cfg_lock();
-void DC_global_cfg_unlock();
-
 #endif
