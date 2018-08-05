@@ -2161,6 +2161,7 @@ int	DCsync_history(int sync_type, int *total_num)
 		if (0 != (program_type & ZBX_PROGRAM_TYPE_SERVER))
 			DCconfig_unlock_all_triggers();
 
+	//	zabbix_log(LOG_LEVEL_INFORMATION, "In %s() Locking cache", __function_name);
 		LOCK_CACHE;
 
 		tmp_history_queue = cache->history_queue;
@@ -2168,10 +2169,12 @@ int	DCsync_history(int sync_type, int *total_num)
 		zbx_binary_heap_create(&cache->history_queue, hc_queue_elem_compare_func, ZBX_BINARY_HEAP_OPTION_EMPTY);
 		zbx_hashset_iter_reset(&cache->history_items, &iter);
 
+		//zabbix_log(LOG_LEVEL_INFORMATION, "In %s() Locking cache", __function_name);
 		/* add all items from history index to the new history queue */
 		while (NULL != (item = (zbx_hc_item_t *)zbx_hashset_iter_next(&iter)))
 			hc_queue_item(item);
 
+		//zabbix_log(LOG_LEVEL_INFORMATION, "In %s() UnLocking cache", __function_name);
 		UNLOCK_CACHE;
 
 		zabbix_log(LOG_LEVEL_WARNING, "syncing history data...");
@@ -2182,6 +2185,7 @@ int	DCsync_history(int sync_type, int *total_num)
 		/* try flushing correlated event queue in the case      */
 		/* some OK events are queued from the last history sync */
 		zbx_flush_correlated_events();
+//		zabbix_log(LOG_LEVEL_INFORMATION, "In %s() Locking will goto finish", __function_name);
 		goto finish;
 	}
 
@@ -2219,13 +2223,16 @@ int	DCsync_history(int sync_type, int *total_num)
 	{
 		if (0 != (program_type & ZBX_PROGRAM_TYPE_SERVER))
 			zbx_vector_uint64_clear(&triggerids);
-
+//		zabbix_log(LOG_LEVEL_INFORMATION, "In %s() Locking cache2", __function_name);
 		LOCK_CACHE;
 
 		hc_pop_items(&history_items);		/* select and take items out of history cache */
 
 		if (0 != history_items.values_num && 0 != (program_type & ZBX_PROGRAM_TYPE_SERVER))
 		{
+
+//			zabbix_log(LOG_LEVEL_INFORMATION, "In %s() Calling lock triggers by hist", __function_name);
+	
 			history_num = DCconfig_lock_triggers_by_history_items(&history_items, &triggerids);
 
 			/* if there are unavailable items, push them back in history queue */
@@ -2234,7 +2241,7 @@ int	DCsync_history(int sync_type, int *total_num)
 		}
 		else
 			history_num = history_items.values_num;
-
+//		zabbix_log(LOG_LEVEL_INFORMATION, "In %s() ULocking cache2", __function_name);
 		UNLOCK_CACHE;
 
 		if (0 == history_num)
@@ -2258,19 +2265,21 @@ int	DCsync_history(int sync_type, int *total_num)
 				zbx_vector_uint64_append(&itemids, history[i].itemid);
 
 			zbx_vector_uint64_sort(&itemids, ZBX_DEFAULT_UINT64_COMPARE_FUNC);
-
+		//	zabbix_log(LOG_LEVEL_INFORMATION, "In %s() Calling DCconfig_get_items", __function_name);
 			DCconfig_get_items_by_itemids(items, itemids.values, errcodes, history_num);
-
+		//	zabbix_log(LOG_LEVEL_INFORMATION, "In %s() Calling DCconfig_update_hist", __function_name);
 			DCmass_update_history(history, &itemids, items, errcodes, history_num);
+		//	zabbix_log(LOG_LEVEL_INFORMATION, "In %s() Calling DCconfig_add_hist", __function_name);
 			DCmass_add_history(history, history_num);
 
 			zbx_vector_uint64_destroy(&itemids);
 
 			DBbegin();
-
+		//	zabbix_log(LOG_LEVEL_INFORMATION, "In %s() Calling DCmass_update_items", __function_name);
 			DCmass_update_items(history, history_num, items, errcodes);
-
+		//	zabbix_log(LOG_LEVEL_INFORMATION, "In %s() Calling DCconfig_update_triggers", __function_name);
 			DCmass_update_triggers(history, history_num, &trigger_diff);
+		//	zabbix_log(LOG_LEVEL_INFORMATION, "In %s() Calling DCconfig_update_trends", __function_name);
 			DCmass_update_trends(history, history_num);
 
 			/* processing of events, generated in functions: */
@@ -2278,12 +2287,14 @@ int	DCsync_history(int sync_type, int *total_num)
 			/*   DCmass_update_triggers() */
 			if (0 != zbx_process_events(&trigger_diff, &triggerids))
 			{
+		//		zabbix_log(LOG_LEVEL_INFORMATION, "In %s() Calling DCconfig_trigger_apply_changes", __function_name);
 				DCconfig_triggers_apply_changes(&trigger_diff);
 				zbx_save_trigger_changes(&trigger_diff);
 			}
 
 			DBcommit();
 
+		//	zabbix_log(LOG_LEVEL_INFORMATION, "In %s() Calling DCconfig_clean_items", __function_name);
 			DCconfig_clean_items(items, errcodes, history_num);
 			zbx_free(errcodes);
 			zbx_free(items);
@@ -2291,28 +2302,35 @@ int	DCsync_history(int sync_type, int *total_num)
 		else
 		{
 			DBbegin();
+    		//	zabbix_log(LOG_LEVEL_INFORMATION, "In %s() Calling DCconfig_proxy_add_hist", __function_name);
 			DCmass_proxy_add_history(history, history_num);
+    		//	zabbix_log(LOG_LEVEL_INFORMATION, "In %s() Calling DCconfig_proxy_update_items", __function_name);
 			DCmass_proxy_update_items(history, history_num);
 			DBcommit();
 		}
 
 		if (0 != (program_type & ZBX_PROGRAM_TYPE_SERVER))
 		{
+    		//	zabbix_log(LOG_LEVEL_INFORMATION, "In %s() Calling update itservices", __function_name);
 			DBupdate_itservices(&trigger_diff);
 			zbx_vector_ptr_clear_ext(&trigger_diff, (zbx_clean_func_t)zbx_trigger_diff_free);
+
+    		//	zabbix_log(LOG_LEVEL_INFORMATION, "In %s() Calling unlock triggers", __function_name);
 			DCconfig_unlock_triggers(&triggerids);
 		}
-
+		//zabbix_log(LOG_LEVEL_INFORMATION, "In %s() Calling lock3", __function_name);
 		LOCK_CACHE;
 
 		next_sync = hc_push_processed_items(&history_items);	/* return processed items into history cache */
 		cache->history_num -= history_num;
 
+		//zabbix_log(LOG_LEVEL_INFORMATION, "In %s() Calling unlock3", __function_name);
 		UNLOCK_CACHE;
 
 		*total_num += history_num;
 		candidate_num = history_items.values_num;
 
+		//zabbix_log(LOG_LEVEL_INFORMATION, "In %s() Calling dc prepare hist", __function_name);
 		DCmodule_prepare_history(history, history_num, history_float, &history_float_num, history_integer,
 				&history_integer_num, history_string, &history_string_num, history_text,
 				&history_text_num, history_log, &history_log_num);
@@ -2724,7 +2742,7 @@ void	dc_add_history(zbx_uint64_t itemid, unsigned char item_value_type, unsigned
 		}
 
 		//zabbix_log(LOG_LEVEL_INFORMATION,"will call hist_unsupported for item %d ",itemid);
-		zabbix_log(LOG_LEVEL_INFORMATION,"will call hist_unsupported for item %d, error is %s",itemid,error);
+//		zabbix_log(LOG_LEVEL_INFORMATION,"will call hist_unsupported for item %d, error is %s",itemid,error);
 		dc_local_add_history_notsupported(itemid, ts, error, lastlogsize, mtime, value_flags);
 		return;
 	}

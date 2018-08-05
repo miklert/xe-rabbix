@@ -43,9 +43,9 @@ extern ZBX_MUTEX	queue_lock[ZBX_POLLER_TYPE_COUNT][ZBX_POLLER_QUEUES_PER_POLLER_
 static int	sync_in_progress = 0;
 //todo: lock all the queuses either
 //#define	LOCK_CACHE	if (0 == sync_in_progress) zbx_mutex_lock(&config_lock)
-#define	LOCK_CACHE	DC_global_cfg_lock()
+#define	LOCK_CACHE	if (0 == sync_in_progress) DC_global_cfg_lock()
 //#define	UNLOCK_CACHE	if (0 == sync_in_progress) zbx_mutex_unlock(&config_lock)
-#define	UNLOCK_CACHE	DC_global_cfg_unlock()
+#define	UNLOCK_CACHE	if (0 == sync_in_progress) DC_global_cfg_unlock()
 
 #define START_SYNC	LOCK_CACHE; sync_in_progress = 1
 #define FINISH_SYNC	sync_in_progress = 0; UNLOCK_CACHE
@@ -73,17 +73,27 @@ static int	sync_in_progress = 0;
 #define DCin_maintenance_without_data_collection(dc_host, dc_item)			\
 		in_maintenance_without_data_collection(dc_host->maintenance_status,	\
 				dc_host->maintenance_type, dc_item->type)
+//static unsigned int globaly_locked_to_process=0;
+
 void DC_global_cfg_lock() 
 {
 	ZBX_MUTEX mutex_num;
 	ZBX_MUTEX config_mutex=ZBX_MUTEX_CONFIG;
+//	unsigned int pid=zbx_get_thread_id();
 
+//	if (pid==globaly_locked_to_process) {
+//	    zabbix_log(LOG_LEVEL_INFORMATION, "GLOBAL LOCK ATTEMPT TO THE SAME THREAD %d",pid);
+//	    return;
+//	}
 	zbx_mutex_lock(&config_mutex);
 
 	for ( mutex_num = ZBX_MUTEX_QUEUE_BASE; mutex_num<ZBX_MUTEX_QUEUE_BASE+ZBX_POLLER_QUEUES_PER_POLLER_TYPE*ZBX_POLLER_TYPE_COUNT;mutex_num++) {
-//		zabbix_log(LOG_LEVEL_INFORMATION, "GLOBAL LOCK LOCKING mutex %d",mutex_num);
+
 		zbx_mutex_lock(&mutex_num);
 	}
+
+	zabbix_log(LOG_LEVEL_INFORMATION, "GLOBALY LOCKED, sync is %d locked ",sync_in_progress);
+//	globaly_locked_to_process=pid;
 }
 
 
@@ -92,12 +102,14 @@ void DC_global_cfg_unlock()
 	ZBX_MUTEX mutex_num;
 	ZBX_MUTEX config_mutex=ZBX_MUTEX_CONFIG;
 
+//	globaly_locked_to_process=0;
 	zbx_mutex_unlock(&config_mutex);
 
 	for (mutex_num=ZBX_MUTEX_QUEUE_BASE; mutex_num<ZBX_MUTEX_QUEUE_BASE+ZBX_POLLER_QUEUES_PER_POLLER_TYPE*ZBX_POLLER_TYPE_COUNT;mutex_num++) {
 		zbx_mutex_unlock(&mutex_num);
 //		zabbix_log(LOG_LEVEL_INFORMATION, "GLOBAL LOCK UNLOCKING mutex %d",mutex_num);
 	}
+	zabbix_log(LOG_LEVEL_INFORMATION, "GLOBALY UNLOCKED sync is %d",sync_in_progress);
 
 }
 
@@ -6498,7 +6510,7 @@ int	DCconfig_lock_triggers_by_history_items(zbx_vector_ptr_t *history_items, zbx
 	ZBX_DC_TRIGGER		*dc_trigger;
 	zbx_hc_item_t		*history_item;
 
-	LOCK_CACHE;
+//	LOCK_CACHE;
 
 	for (i = 0; i < history_items->values_num; i++)
 	{
@@ -6534,7 +6546,7 @@ int	DCconfig_lock_triggers_by_history_items(zbx_vector_ptr_t *history_items, zbx
 next:;
 	}
 
-	UNLOCK_CACHE;
+//	UNLOCK_CACHE;
 
 	return history_items->values_num - locked_num;
 }
