@@ -47,7 +47,7 @@ static zbx_mem_info_t	*trend_mem = NULL;
 #define	UNLOCK_CACHE	DC_global_cfg_unlock()
 
 #define ZBX_HISTORY_CACHES	4
-#define CIDX	procnum%ZBX_HISTORY_CACHES
+#define CIDX	procnum%4
 
 
 #define	LOCK_TRENDS	zbx_mutex_lock(&trends_lock)
@@ -2146,7 +2146,9 @@ int	DCsync_history(int sync_type, int *total_num, unsigned int procnum)
 	zbx_vector_ptr_t		history_items, trigger_diff;
 	zbx_binary_heap_t		tmp_history_queue;
 
-	zabbix_log(LOG_LEVEL_DEBUG, "In %s() ", __function_name);
+
+	zabbix_log(LOG_LEVEL_DEBUG, "In %s() history ");
+	zabbix_log(LOG_LEVEL_DEBUG, "In %s() history num is %d", __function_name, cache->history_num[CIDX]);
 
 	*total_num = 0;
 
@@ -2170,24 +2172,26 @@ int	DCsync_history(int sync_type, int *total_num, unsigned int procnum)
 		if (0 != (program_type & ZBX_PROGRAM_TYPE_SERVER))
 			DCconfig_unlock_all_triggers();
 
-		zabbix_log(LOG_LEVEL_INFORMATION, "In %s() Locking hist cache", __function_name);
+		zabbix_log(LOG_LEVEL_INFORMATION, "In %s() Locking hist cache1", __function_name);
 		LOCK_HISTORY;
 
 		tmp_history_queue = cache->history_queue[CIDX];
 
 		zbx_binary_heap_create(&cache->history_queue[CIDX], hc_queue_elem_compare_func, ZBX_BINARY_HEAP_OPTION_EMPTY);
+		zabbix_log(LOG_LEVEL_INFORMATION, "In %s() Locking cache1.2", __function_name);
 		zbx_hashset_iter_reset(&cache->history_items[CIDX], &iter);
 
-		zabbix_log(LOG_LEVEL_INFORMATION, "In %s() Locking cache", __function_name);
+		zabbix_log(LOG_LEVEL_INFORMATION, "In %s() Locking cache2", __function_name);
 		/* add all items from history index to the new history queue */
 		while (NULL != (item = (zbx_hc_item_t *)zbx_hashset_iter_next(&iter)))
 			hc_queue_item(item,procnum);
 
-			zabbix_log(LOG_LEVEL_INFORMATION, "In %s() UnLocking cache", __function_name);
+			zabbix_log(LOG_LEVEL_INFORMATION, "In %s() UnLocking cache1", __function_name);
 		UNLOCK_HISTORY;
 
 		zabbix_log(LOG_LEVEL_WARNING, "syncing history data...");
 	}
+
 
 	if (0 == cache->history_num[CIDX] && 0 != (program_type & ZBX_PROGRAM_TYPE_SERVER))
 	{
@@ -3521,14 +3525,17 @@ int	init_database_cache(char **error)
 	if (SUCCEED != (ret = zbx_mutex_create(&cache_lock, ZBX_MUTEX_CACHE, error)))
 		goto out;
 
+//	zabbix_log(LOG_LEVEL_DEBUG, "In %s() 1", __function_name);
+
 	if (SUCCEED != (ret = zbx_mutex_create(&cache_ids_lock, ZBX_MUTEX_CACHE_IDS, error)))
 		goto out;
+
+//	zabbix_log(LOG_LEVEL_DEBUG, "In %s() 2", __function_name);
 
 	for (i=0; i<4; i++)  {
 		if (SUCCEED != (ret = zbx_mutex_create(&history_lock[i], ZBX_MUTEX_HISTORY_BASE+i, error)))
 		zabbix_log(LOG_LEVEL_INFORMATION, "In %s() created mutex %d", __function_name,ZBX_MUTEX_HISTORY_BASE+i);
 
-		goto out;
 	}
 
 
@@ -3550,7 +3557,7 @@ int	init_database_cache(char **error)
 	ids = (ZBX_DC_IDS *)__hc_index_mem_malloc_func(NULL, sizeof(ZBX_DC_IDS));
 	memset(ids, 0, sizeof(ZBX_DC_IDS));
 
-	for ( i=0 ; i< ZBX_HISTORY_CACHES; i++) 
+	for ( i=0 ; i< 4; i++) 
 	{
 		zbx_hashset_create_ext(&cache->history_items[i], ZBX_HC_ITEMS_INIT_SIZE,
 			ZBX_DEFAULT_UINT64_HASH_FUNC, ZBX_DEFAULT_UINT64_COMPARE_FUNC, NULL,
@@ -3559,6 +3566,7 @@ int	init_database_cache(char **error)
 		zbx_binary_heap_create_ext(&cache->history_queue[i], hc_queue_elem_compare_func, ZBX_BINARY_HEAP_OPTION_EMPTY,
 			__hc_index_mem_malloc_func, __hc_index_mem_realloc_func, __hc_index_mem_free_func);
 		cache->history_num[i]=0;
+	    zabbix_log(LOG_LEVEL_INFORMATION, "In %s() INIT cache->history %d",__function_name,i);
 	}
 	if (0 != (program_type & ZBX_PROGRAM_TYPE_SERVER))
 	{
