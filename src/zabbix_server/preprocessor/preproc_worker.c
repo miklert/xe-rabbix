@@ -29,6 +29,7 @@
 #include "preproc_worker.h"
 #include "item_preproc.h"
 
+#define	STAT_INTERVAL	5	/* if a process is busy and does not sleep then update status not faster than */
 
 //#define IDX process_num % ZBX_PREPROCESSING_FORKS
 
@@ -119,6 +120,9 @@ ZBX_THREAD_ENTRY(preprocessing_worker_thread, args)
 	zbx_ipc_socket_t	socket;
 	zbx_ipc_message_t	message;
 	char 			socket_name[MAX_STRING_LEN];
+	unsigned long processed_messages=0;
+	double			time_stat, time_now;
+
 
 	process_type = ((zbx_thread_args_t *)args)->process_type;
 	server_num = ((zbx_thread_args_t *)args)->server_num;
@@ -147,10 +151,15 @@ ZBX_THREAD_ENTRY(preprocessing_worker_thread, args)
 
 	update_selfmon_counter(ZBX_PROCESS_STATE_BUSY);
 
+	time_stat = zbx_time();
+	time_now = time_stat;
+
+
 	for (;;)
 	{
-		//WTF???? Aren't there any place better to handle log rotation with blocking ?
+		//WTF???? Aren't there any better place to handle log rotation with locking ?
 		//zbx_handle_log();
+		time_now = zbx_time();
 
 		update_selfmon_counter(ZBX_PROCESS_STATE_IDLE);
 
@@ -166,10 +175,24 @@ ZBX_THREAD_ENTRY(preprocessing_worker_thread, args)
 		{
 			case ZBX_IPC_PREPROCESSOR_REQUEST:
 				worker_preprocess_value(&socket, &message);
+				processed_messages++;
+
 				break;
 		}
 
 		zbx_ipc_message_clean(&message);
+
+		if (STAT_INTERVAL < time_now - time_stat)
+		{
+
+			zbx_setproctitle("%s #%d processed %u messages last %d sec", get_process_type_string(process_type), process_num,processed_messages,STAT_INTERVAL);
+
+			time_stat = time_now;
+			processed_messages = 0;
+		}
+
+
+
 	}
 
 	return 0;

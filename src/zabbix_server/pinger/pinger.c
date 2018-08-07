@@ -421,7 +421,7 @@ static void	get_pinger_hosts(unsigned int process_num, icmpitem_t **icmp_items, 
 	zabbix_log(LOG_LEVEL_DEBUG, "In %s()", __function_name);
 
 
-	items=zbx_malloc(NULL,sizeof(DC_ITEM)*MAX_POLLER_ITEMS);
+	items=zbx_malloc(NULL,sizeof(DC_ITEM)*MAX_PINGER_ITEMS);
 
 	num = DCconfig_get_poller_items(ZBX_POLLER_TYPE_PINGER, process_num, items);
 

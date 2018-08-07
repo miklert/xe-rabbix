@@ -38,10 +38,10 @@
 
 
 #define MAX_JAVA_ITEMS		32
-#define MAX_SNMP_ITEMS		32768
-#define MAX_POLLER_ITEMS	32768	/* MAX(MAX_JAVA_ITEMS, MAX_SNMP_ITEMS) */
+#define MAX_SNMP_ITEMS		8192
+#define MAX_POLLER_ITEMS	8192	/* MAX(MAX_JAVA_ITEMS, MAX_SNMP_ITEMS) */
 #define MAX_PINGER_ITEMS	8192
-#define MAX_SNMP_ASYNC_HOSTS	32768	//maximum hosts to process simulteniously
+#define MAX_SNMP_ASYNC_HOSTS	8192	//maximum hosts to process simulteniously
 					//this setting  multiplied by poller number - is how many
 					//sockets we would need in the worst case
 
@@ -519,8 +519,8 @@ int	in_maintenance_without_data_collection(unsigned char maintenance_status, uns
 		unsigned char type);
 void	dc_add_history(zbx_uint64_t itemid, unsigned char item_value_type, unsigned char item_flags,
 		AGENT_RESULT *result, const zbx_timespec_t *ts, unsigned char state, const char *error);
-void	dc_flush_history(void);
-int	DCsync_history(int sync_type, int *sync_num);
+void	dc_flush_history( unsigned int procnum);
+int	DCsync_history(int sync_type, int *sync_num, unsigned int procnum);
 int	init_database_cache(char **error);
 void	free_database_cache(void);
 

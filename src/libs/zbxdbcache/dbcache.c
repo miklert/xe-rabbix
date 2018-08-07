@@ -46,17 +46,25 @@ static zbx_mem_info_t	*trend_mem = NULL;
 //#define	UNLOCK_CACHE	zbx_mutex_unlock(&cache_lock)
 #define	UNLOCK_CACHE	DC_global_cfg_unlock()
 
+#define ZBX_HISTORY_CACHES	4
+#define CIDX	procnum%ZBX_HISTORY_CACHES
+
+
 #define	LOCK_TRENDS	zbx_mutex_lock(&trends_lock)
 #define	UNLOCK_TRENDS	zbx_mutex_unlock(&trends_lock)
 
 #define	LOCK_CACHE_IDS		zbx_mutex_lock(&cache_ids_lock)
 #define	UNLOCK_CACHE_IDS	zbx_mutex_unlock(&cache_ids_lock)
 
+#define LOCK_HISTORY		zbx_mutex_lock(&history_lock[CIDX])
+#define UNLOCK_HISTORY		zbx_mutex_unlock(&history_lock[CIDX])
+
 static ZBX_MUTEX	cache_lock = ZBX_MUTEX_NULL;
   ZBX_MUTEX	queue_lock[ZBX_POLLER_TYPE_COUNT][ZBX_POLLER_QUEUES_PER_POLLER_TYPE];
 
 static ZBX_MUTEX	trends_lock = ZBX_MUTEX_NULL;
 static ZBX_MUTEX	cache_ids_lock = ZBX_MUTEX_NULL;
+static ZBX_MUTEX	history_lock[4];
 
 static char		*sql = NULL;
 static size_t		sql_alloc = 64 * ZBX_KIBIBYTE;
@@ -132,10 +140,10 @@ typedef struct
 	zbx_hashset_t		trends;
 	ZBX_DC_STATS		stats;
 
-	zbx_hashset_t		history_items;
-	zbx_binary_heap_t	history_queue;
+	zbx_hashset_t		history_items[ZBX_HISTORY_CACHES];
+	zbx_binary_heap_t	history_queue[ZBX_HISTORY_CACHES];
+	int			history_num[ZBX_HISTORY_CACHES];
 
-	int			history_num;
 	int			trends_num;
 	int			trends_last_cleanup_hour;
 }
@@ -186,13 +194,13 @@ static size_t		string_values_alloc = 0, string_values_offset = 0;
 static dc_item_value_t	*item_values = NULL;
 static size_t		item_values_alloc = 0, item_values_num = 0;
 
-static void	hc_add_item_values(dc_item_value_t *values, int values_num);
-static void	hc_pop_items(zbx_vector_ptr_t *history_items);
+static void	hc_add_item_values(dc_item_value_t *values, int values_num, unsigned int procnum);
+static void	hc_pop_items(zbx_vector_ptr_t *history_items, unsigned int procnum);
 static void	hc_get_item_values(ZBX_DC_HISTORY *history, zbx_vector_ptr_t *history_items);
-static void	hc_push_busy_items(zbx_vector_ptr_t *history_items);
-static int	hc_push_processed_items(zbx_vector_ptr_t *history_items);
+static void	hc_push_busy_items(zbx_vector_ptr_t *history_items, unsigned int procnum);
+static int	hc_push_processed_items(zbx_vector_ptr_t *history_items, unsigned int procnum);
 static void	hc_free_item_values(ZBX_DC_HISTORY *history, int history_num);
-static void	hc_queue_item(zbx_hc_item_t *item);
+static void	hc_queue_item(zbx_hc_item_t *item, unsigned int procnum);
 static int	hc_queue_elem_compare_func(const void *d1, const void *d2);
 
 /******************************************************************************
@@ -215,6 +223,7 @@ void	*DCget_stats(int request)
 	switch (request)
 	{
 		case ZBX_STATS_HISTORY_COUNTER:
+			//todo: count all history caches
 			value_uint = cache->stats.history_counter;
 			ret = (void *)&value_uint;
 			break;
@@ -2118,7 +2127,7 @@ static void	DCmodule_prepare_history(ZBX_DC_HISTORY *history, int history_num, Z
  * Author: Alexei Vladishev                                                   *
  *                                                                            *
  ******************************************************************************/
-int	DCsync_history(int sync_type, int *total_num)
+int	DCsync_history(int sync_type, int *total_num, unsigned int procnum)
 {
 	const char			*__function_name = "DCsync_history";
 
@@ -2137,7 +2146,7 @@ int	DCsync_history(int sync_type, int *total_num)
 	zbx_vector_ptr_t		history_items, trigger_diff;
 	zbx_binary_heap_t		tmp_history_queue;
 
-	zabbix_log(LOG_LEVEL_DEBUG, "In %s() history_num:%d", __function_name, cache->history_num);
+	zabbix_log(LOG_LEVEL_DEBUG, "In %s() ", __function_name);
 
 	*total_num = 0;
 
@@ -2161,26 +2170,26 @@ int	DCsync_history(int sync_type, int *total_num)
 		if (0 != (program_type & ZBX_PROGRAM_TYPE_SERVER))
 			DCconfig_unlock_all_triggers();
 
-	//	zabbix_log(LOG_LEVEL_INFORMATION, "In %s() Locking cache", __function_name);
-		LOCK_CACHE;
+		zabbix_log(LOG_LEVEL_INFORMATION, "In %s() Locking hist cache", __function_name);
+		LOCK_HISTORY;
 
-		tmp_history_queue = cache->history_queue;
+		tmp_history_queue = cache->history_queue[CIDX];
 
-		zbx_binary_heap_create(&cache->history_queue, hc_queue_elem_compare_func, ZBX_BINARY_HEAP_OPTION_EMPTY);
-		zbx_hashset_iter_reset(&cache->history_items, &iter);
+		zbx_binary_heap_create(&cache->history_queue[CIDX], hc_queue_elem_compare_func, ZBX_BINARY_HEAP_OPTION_EMPTY);
+		zbx_hashset_iter_reset(&cache->history_items[CIDX], &iter);
 
-		//zabbix_log(LOG_LEVEL_INFORMATION, "In %s() Locking cache", __function_name);
+		zabbix_log(LOG_LEVEL_INFORMATION, "In %s() Locking cache", __function_name);
 		/* add all items from history index to the new history queue */
 		while (NULL != (item = (zbx_hc_item_t *)zbx_hashset_iter_next(&iter)))
-			hc_queue_item(item);
+			hc_queue_item(item,procnum);
 
-		//zabbix_log(LOG_LEVEL_INFORMATION, "In %s() UnLocking cache", __function_name);
-		UNLOCK_CACHE;
+			zabbix_log(LOG_LEVEL_INFORMATION, "In %s() UnLocking cache", __function_name);
+		UNLOCK_HISTORY;
 
 		zabbix_log(LOG_LEVEL_WARNING, "syncing history data...");
 	}
 
-	if (0 == cache->history_num && 0 != (program_type & ZBX_PROGRAM_TYPE_SERVER))
+	if (0 == cache->history_num[CIDX] && 0 != (program_type & ZBX_PROGRAM_TYPE_SERVER))
 	{
 		/* try flushing correlated event queue in the case      */
 		/* some OK events are queued from the last history sync */
@@ -2212,21 +2221,21 @@ int	DCsync_history(int sync_type, int *total_num)
 	if (0 != (program_type & ZBX_PROGRAM_TYPE_SERVER))
 	{
 		zbx_vector_uint64_create(&triggerids);
-		zbx_vector_uint64_reserve(&triggerids, MIN(cache->history_num, ZBX_HC_SYNC_MAX) + 32);
+		zbx_vector_uint64_reserve(&triggerids, MIN(cache->history_num[CIDX], ZBX_HC_SYNC_MAX) + 32);
 		zbx_vector_ptr_create(&trigger_diff);
 	}
 
 	zbx_vector_ptr_create(&history_items);
-	zbx_vector_ptr_reserve(&history_items, MIN(cache->history_num, ZBX_HC_SYNC_MAX) + 32);
+	zbx_vector_ptr_reserve(&history_items, MIN(cache->history_num[CIDX], ZBX_HC_SYNC_MAX) + 32);
 
 	do
 	{
 		if (0 != (program_type & ZBX_PROGRAM_TYPE_SERVER))
 			zbx_vector_uint64_clear(&triggerids);
 //		zabbix_log(LOG_LEVEL_INFORMATION, "In %s() Locking cache2", __function_name);
-		LOCK_CACHE;
+		LOCK_HISTORY;
 
-		hc_pop_items(&history_items);		/* select and take items out of history cache */
+		hc_pop_items(&history_items,procnum);		/* select and take items out of history cache */
 
 		if (0 != history_items.values_num && 0 != (program_type & ZBX_PROGRAM_TYPE_SERVER))
 		{
@@ -2237,12 +2246,12 @@ int	DCsync_history(int sync_type, int *total_num)
 
 			/* if there are unavailable items, push them back in history queue */
 			if (history_num != history_items.values_num)
-				hc_push_busy_items(&history_items);
+				hc_push_busy_items(&history_items,procnum);
 		}
 		else
 			history_num = history_items.values_num;
 //		zabbix_log(LOG_LEVEL_INFORMATION, "In %s() ULocking cache2", __function_name);
-		UNLOCK_CACHE;
+		UNLOCK_HISTORY;
 
 		if (0 == history_num)
 			break;
@@ -2319,13 +2328,13 @@ int	DCsync_history(int sync_type, int *total_num)
 			DCconfig_unlock_triggers(&triggerids);
 		}
 		//zabbix_log(LOG_LEVEL_INFORMATION, "In %s() Calling lock3", __function_name);
-		LOCK_CACHE;
+		LOCK_HISTORY;
 
-		next_sync = hc_push_processed_items(&history_items);	/* return processed items into history cache */
-		cache->history_num -= history_num;
+		next_sync = hc_push_processed_items(&history_items,procnum);	/* return processed items into history cache */
+		cache->history_num[CIDX] -= history_num;
 
 		//zabbix_log(LOG_LEVEL_INFORMATION, "In %s() Calling unlock3", __function_name);
-		UNLOCK_CACHE;
+		UNLOCK_HISTORY;
 
 		*total_num += history_num;
 		candidate_num = history_items.values_num;
@@ -2415,7 +2424,7 @@ int	DCsync_history(int sync_type, int *total_num)
 		if (ZBX_SYNC_FULL == sync_type && now - sync_start >= 10)
 		{
 			zabbix_log(LOG_LEVEL_WARNING, "syncing history data... " ZBX_FS_DBL "%%",
-					(double)*total_num / (cache->history_num + *total_num) * 100);
+					(double)*total_num / (cache->history_num[CIDX] + *total_num) * 100);
 			sync_start = now;
 		}
 
@@ -2448,12 +2457,12 @@ int	DCsync_history(int sync_type, int *total_num)
 finish:
 	if (ZBX_SYNC_FULL == sync_type)
 	{
-		LOCK_CACHE;
+		LOCK_HISTORY;
 
-		zbx_binary_heap_destroy(&cache->history_queue);
-		cache->history_queue = tmp_history_queue;
+		zbx_binary_heap_destroy(&cache->history_queue[CIDX]);
+		cache->history_queue[CIDX] = tmp_history_queue;
 
-		UNLOCK_CACHE;
+		UNLOCK_HISTORY;
 
 		if (0 != (program_type & ZBX_PROGRAM_TYPE_SERVER))
 		{
@@ -2487,10 +2496,10 @@ static void	dc_string_buffer_realloc(size_t len)
 	string_values = zbx_realloc(string_values, string_values_alloc);
 }
 
-static dc_item_value_t	*dc_local_get_history_slot(void)
+static dc_item_value_t	*dc_local_get_history_slot(unsigned int procnum)
 {
 	if (ZBX_MAX_VALUES_LOCAL == item_values_num)
-		dc_flush_history();
+		dc_flush_history(procnum);
 
 	if (item_values_alloc == item_values_num)
 	{
@@ -2502,11 +2511,11 @@ static dc_item_value_t	*dc_local_get_history_slot(void)
 }
 
 static void	dc_local_add_history_dbl(zbx_uint64_t itemid, unsigned char item_value_type, const zbx_timespec_t *ts,
-		double value_orig, zbx_uint64_t lastlogsize, int mtime, unsigned char flags)
+		double value_orig, zbx_uint64_t lastlogsize, int mtime, unsigned char flags, unsigned int procnum)
 {
 	dc_item_value_t	*item_value;
 
-	item_value = dc_local_get_history_slot();
+	item_value = dc_local_get_history_slot(procnum);
 
 	item_value->itemid = itemid;
 	item_value->ts = *ts;
@@ -2526,11 +2535,11 @@ static void	dc_local_add_history_dbl(zbx_uint64_t itemid, unsigned char item_val
 }
 
 static void	dc_local_add_history_uint(zbx_uint64_t itemid, unsigned char item_value_type, const zbx_timespec_t *ts,
-		zbx_uint64_t value_orig, zbx_uint64_t lastlogsize, int mtime, unsigned char flags)
+		zbx_uint64_t value_orig, zbx_uint64_t lastlogsize, int mtime, unsigned char flags, unsigned int procnum)
 {
 	dc_item_value_t	*item_value;
 
-	item_value = dc_local_get_history_slot();
+	item_value = dc_local_get_history_slot(procnum);
 
 	item_value->itemid = itemid;
 	item_value->ts = *ts;
@@ -2550,11 +2559,11 @@ static void	dc_local_add_history_uint(zbx_uint64_t itemid, unsigned char item_va
 }
 
 static void	dc_local_add_history_text(zbx_uint64_t itemid, unsigned char item_value_type, const zbx_timespec_t *ts,
-		const char *value_orig, zbx_uint64_t lastlogsize, int mtime, unsigned char flags)
+		const char *value_orig, zbx_uint64_t lastlogsize, int mtime, unsigned char flags, unsigned int procnum)
 {
 	dc_item_value_t	*item_value;
 
-	item_value = dc_local_get_history_slot();
+	item_value = dc_local_get_history_slot(procnum);
 
 	item_value->itemid = itemid;
 	item_value->ts = *ts;
@@ -2583,11 +2592,11 @@ static void	dc_local_add_history_text(zbx_uint64_t itemid, unsigned char item_va
 }
 
 static void	dc_local_add_history_log(zbx_uint64_t itemid, unsigned char item_value_type, const zbx_timespec_t *ts,
-		const zbx_log_t *log, zbx_uint64_t lastlogsize, int mtime, unsigned char flags)
+		const zbx_log_t *log, zbx_uint64_t lastlogsize, int mtime, unsigned char flags, unsigned int procnum)
 {
 	dc_item_value_t	*item_value;
 
-	item_value = dc_local_get_history_slot();
+	item_value = dc_local_get_history_slot(procnum);
 
 	item_value->itemid = itemid;
 	item_value->ts = *ts;
@@ -2643,11 +2652,11 @@ static void	dc_local_add_history_log(zbx_uint64_t itemid, unsigned char item_val
 }
 
 static void	dc_local_add_history_notsupported(zbx_uint64_t itemid, const zbx_timespec_t *ts, const char *error,
-		zbx_uint64_t lastlogsize, int mtime, unsigned char flags)
+		zbx_uint64_t lastlogsize, int mtime, unsigned char flags, unsigned int procnum)
 {
 	dc_item_value_t	*item_value;
 
-	item_value = dc_local_get_history_slot();
+	item_value = dc_local_get_history_slot(procnum);
 
 	item_value->itemid = itemid;
 	item_value->ts = *ts; 
@@ -2683,11 +2692,11 @@ static void	dc_local_add_history_notsupported(zbx_uint64_t itemid, const zbx_tim
 	string_values_offset += item_value->value.value_str.len;
 }
 
-static void	dc_local_add_history_lld(zbx_uint64_t itemid, const zbx_timespec_t *ts, const char *value_orig)
+static void	dc_local_add_history_lld(zbx_uint64_t itemid, const zbx_timespec_t *ts, const char *value_orig, unsigned int procnum)
 {
 	dc_item_value_t	*item_value;
 
-	item_value = dc_local_get_history_slot();
+	item_value = dc_local_get_history_slot(procnum);
 
 	item_value->itemid = itemid;
 	item_value->ts = *ts;
@@ -2722,6 +2731,7 @@ void	dc_add_history(zbx_uint64_t itemid, unsigned char item_value_type, unsigned
 		AGENT_RESULT *result, const zbx_timespec_t *ts, unsigned char state, const char *error)
 {
 	unsigned char	value_flags;
+	unsigned int procnum=zbx_get_thread_id();
 
 	if (ITEM_STATE_NOTSUPPORTED == state)
 	{
@@ -2743,7 +2753,7 @@ void	dc_add_history(zbx_uint64_t itemid, unsigned char item_value_type, unsigned
 
 		//zabbix_log(LOG_LEVEL_INFORMATION,"will call hist_unsupported for item %d ",itemid);
 //		zabbix_log(LOG_LEVEL_INFORMATION,"will call hist_unsupported for item %d, error is %s",itemid,error);
-		dc_local_add_history_notsupported(itemid, ts, error, lastlogsize, mtime, value_flags);
+		dc_local_add_history_notsupported(itemid, ts, error, lastlogsize, mtime, value_flags,procnum);
 		return;
 	}
 
@@ -2755,7 +2765,7 @@ void	dc_add_history(zbx_uint64_t itemid, unsigned char item_value_type, unsigned
 		/* proxy stores low-level discovery (lld) values in db */
 		if (0 == (ZBX_PROGRAM_TYPE_SERVER & program_type))
 			//zabbix_log(LOG_LEVEL_INFORMATION,"will call add_hist_lld");
-			dc_local_add_history_lld(itemid, ts, result->text);
+			dc_local_add_history_lld(itemid, ts, result->text,procnum);
 
 		return;
 	}
@@ -2780,28 +2790,28 @@ void	dc_add_history(zbx_uint64_t itemid, unsigned char item_value_type, unsigned
 		if (ISSET_LOG(result))
 		{
 			dc_local_add_history_log(itemid, item_value_type, ts, result->log, result->lastlogsize,
-					result->mtime, value_flags);
+					result->mtime, value_flags,procnum);
 		}
 		else if (ISSET_UI64(result))
 		{
 			
 			dc_local_add_history_uint(itemid, item_value_type, ts, result->ui64, result->lastlogsize,
-					result->mtime, value_flags);
+					result->mtime, value_flags,procnum);
 		}
 		else if (ISSET_DBL(result))
 		{
 			dc_local_add_history_dbl(itemid, item_value_type, ts, result->dbl, result->lastlogsize,
-					result->mtime, value_flags);
+					result->mtime, value_flags,procnum);
 		}
 		else if (ISSET_STR(result))
 		{
 			dc_local_add_history_text(itemid, item_value_type, ts, result->str, result->lastlogsize,
-					result->mtime, value_flags);
+					result->mtime, value_flags,procnum);
 		}
 		else if (ISSET_TEXT(result))
 		{
 			dc_local_add_history_text(itemid, item_value_type, ts, result->text, result->lastlogsize,
-					result->mtime, value_flags);
+					result->mtime, value_flags,procnum);
 		}
 		else
 		{  
@@ -2814,7 +2824,7 @@ void	dc_add_history(zbx_uint64_t itemid, unsigned char item_value_type, unsigned
 		if (0 != (value_flags & ZBX_DC_FLAG_META))
 		{
 			dc_local_add_history_log(itemid, item_value_type, ts, NULL, result->lastlogsize, result->mtime,
-					value_flags);
+					value_flags,procnum);
 		}
 		else
 			THIS_SHOULD_NEVER_HAPPEN;
@@ -2822,18 +2832,18 @@ void	dc_add_history(zbx_uint64_t itemid, unsigned char item_value_type, unsigned
 	}
 }
 
-void	dc_flush_history(void)
+void	dc_flush_history(unsigned int procnum)
 {
 	if (0 == item_values_num)
 		return;
 
-	LOCK_CACHE;
+	LOCK_HISTORY;
 
-	hc_add_item_values(item_values, item_values_num);
+	hc_add_item_values(item_values, item_values_num,procnum);
 
-	cache->history_num += item_values_num;
+	cache->history_num[CIDX] += item_values_num;
 
-	UNLOCK_CACHE;
+	UNLOCK_HISTORY;
 
 	item_values_num = 0;
 	string_values_offset = 0;
@@ -2928,11 +2938,11 @@ static void	hc_free_data(zbx_hc_data_t *data)
  * Parameters: data - [IN] history item data                                  *
  *                                                                            *
  ******************************************************************************/
-static void	hc_queue_item(zbx_hc_item_t *item)
+static void	hc_queue_item(zbx_hc_item_t *item, unsigned int procnum)
 {
 	zbx_binary_heap_elem_t	elem = {item->itemid, (const void *)item};
 
-	zbx_binary_heap_insert(&cache->history_queue, &elem);
+	zbx_binary_heap_insert(&cache->history_queue[CIDX], &elem);
 }
 
 /******************************************************************************
@@ -2947,9 +2957,9 @@ static void	hc_queue_item(zbx_hc_item_t *item)
  *               history cache                                                *
  *                                                                            *
  ******************************************************************************/
-static zbx_hc_item_t	*hc_get_item(zbx_uint64_t itemid)
+static zbx_hc_item_t	*hc_get_item(zbx_uint64_t itemid, unsigned int procnum)
 {
-	return (zbx_hc_item_t *)zbx_hashset_search(&cache->history_items, &itemid);
+	return (zbx_hc_item_t *)zbx_hashset_search(&cache->history_items[CIDX], &itemid);
 }
 
 /******************************************************************************
@@ -2964,11 +2974,11 @@ static zbx_hc_item_t	*hc_get_item(zbx_uint64_t itemid)
  * Return value: the added history item                                       *
  *                                                                            *
  ******************************************************************************/
-static zbx_hc_item_t	*hc_add_item(zbx_uint64_t itemid, zbx_hc_data_t *data)
+static zbx_hc_item_t	*hc_add_item(zbx_uint64_t itemid, zbx_hc_data_t *data, unsigned int procnum)
 {
 	zbx_hc_item_t	item_local = {itemid, ZBX_HC_ITEM_STATUS_NORMAL, data, data};
 
-	return (zbx_hc_item_t *)zbx_hashset_insert(&cache->history_items, &item_local, sizeof(item_local));
+	return (zbx_hc_item_t *)zbx_hashset_insert(&cache->history_items[CIDX], &item_local, sizeof(item_local));
 }
 
 /******************************************************************************
@@ -3198,7 +3208,7 @@ static int	hc_clone_history_data(zbx_hc_data_t **data, const dc_item_value_t *it
  *           the new value.                                                   *
  *                                                                            *
  ******************************************************************************/
-static void	hc_add_item_values(dc_item_value_t *values, int values_num)
+static void	hc_add_item_values(dc_item_value_t *values, int values_num, unsigned int procnum)
 {
 	dc_item_value_t	*item_value;
 	int		i;
@@ -3214,16 +3224,16 @@ static void	hc_add_item_values(dc_item_value_t *values, int values_num)
 		{
 			UNLOCK_CACHE;
 
-			zabbix_log(LOG_LEVEL_DEBUG, "History buffer is full. Sleeping for 1 second.");
+			zabbix_log(LOG_LEVEL_INFORMATION, "History buffer is full. Sleeping for 1 second.");
 			sleep(1);
 
 			LOCK_CACHE;
 		}
 
-		if (NULL == (item = hc_get_item(item_value->itemid)))
+		if (NULL == (item = hc_get_item(item_value->itemid,procnum)))
 		{
-			item = hc_add_item(item_value->itemid, data);
-			hc_queue_item(item);
+			item = hc_add_item(item_value->itemid, data,procnum);
+			hc_queue_item(item,procnum);
 		}
 		else
 		{
@@ -3309,18 +3319,18 @@ static void	hc_copy_history_data(ZBX_DC_HISTORY *history, zbx_uint64_t itemid, z
  *           hc_push_items() function after they have been processed.         *
  *                                                                            *
  ******************************************************************************/
-static void	hc_pop_items(zbx_vector_ptr_t *history_items)
+static void	hc_pop_items(zbx_vector_ptr_t *history_items, unsigned int procnum)
 {
 	zbx_binary_heap_elem_t	*elem;
 	zbx_hc_item_t		*item;
 
-	while (ZBX_HC_SYNC_MAX > history_items->values_num && FAIL == zbx_binary_heap_empty(&cache->history_queue))
+	while (ZBX_HC_SYNC_MAX > history_items->values_num && FAIL == zbx_binary_heap_empty(&cache->history_queue[CIDX]))
 	{
-		elem = zbx_binary_heap_find_min(&cache->history_queue);
+		elem = zbx_binary_heap_find_min(&cache->history_queue[CIDX]);
 		item = (zbx_hc_item_t *)elem->data;
 		zbx_vector_ptr_append(history_items, item);
 
-		zbx_binary_heap_remove_min(&cache->history_queue);
+		zbx_binary_heap_remove_min(&cache->history_queue[CIDX]);
 	}
 }
 
@@ -3360,7 +3370,7 @@ static void	hc_get_item_values(ZBX_DC_HISTORY *history, zbx_vector_ptr_t *histor
  * Parameters: history_items - [IN] the history items                         *
  *                                                                            *
  ******************************************************************************/
-static void	hc_push_busy_items(zbx_vector_ptr_t *history_items)
+static void	hc_push_busy_items(zbx_vector_ptr_t *history_items, unsigned int procnum)
 {
 	int		i;
 	zbx_hc_item_t	*item;
@@ -3374,7 +3384,7 @@ static void	hc_push_busy_items(zbx_vector_ptr_t *history_items)
 
 		/* reset item status before returning it to queue */
 		item->status = ZBX_HC_ITEM_STATUS_NORMAL;
-		hc_queue_item(item);
+		hc_queue_item(item,procnum);
 
 		/* After pushing back to queue current syncer has released ownership of this item. */
 		/* To avoid using it further reset the item reference in vector to NULL.           */
@@ -3398,7 +3408,7 @@ static void	hc_push_busy_items(zbx_vector_ptr_t *history_items)
  *           removed from history index.                                      *
  *                                                                            *
  ******************************************************************************/
-static int	hc_push_processed_items(zbx_vector_ptr_t *history_items)
+static int	hc_push_processed_items(zbx_vector_ptr_t *history_items, unsigned int procnum)
 {
 	int		i;
 	zbx_hc_item_t	*item;
@@ -3417,18 +3427,18 @@ static int	hc_push_processed_items(zbx_vector_ptr_t *history_items)
 
 		if (NULL == item->tail)
 		{
-			zbx_hashset_remove(&cache->history_items, item);
+			zbx_hashset_remove(&cache->history_items[CIDX], item);
 			continue;
 		}
 
-		hc_queue_item(item);
+		hc_queue_item(item,procnum);
 	}
 
-	if (FAIL == zbx_binary_heap_empty(&cache->history_queue))
+	if (FAIL == zbx_binary_heap_empty(&cache->history_queue[CIDX]))
 	{
 		zbx_binary_heap_elem_t	*elem;
 
-		elem = zbx_binary_heap_find_min(&cache->history_queue);
+		elem = zbx_binary_heap_find_min(&cache->history_queue[CIDX]);
 		item = (zbx_hc_item_t *)elem->data;
 
 		next_sync = item->tail->ts.sec;
@@ -3514,6 +3524,14 @@ int	init_database_cache(char **error)
 	if (SUCCEED != (ret = zbx_mutex_create(&cache_ids_lock, ZBX_MUTEX_CACHE_IDS, error)))
 		goto out;
 
+	for (i=0; i<4; i++)  {
+		if (SUCCEED != (ret = zbx_mutex_create(&history_lock[i], ZBX_MUTEX_HISTORY_BASE+i, error)))
+		zabbix_log(LOG_LEVEL_INFORMATION, "In %s() created mutex %d", __function_name,ZBX_MUTEX_HISTORY_BASE+i);
+
+		goto out;
+	}
+
+
 	if (SUCCEED != (ret = zbx_mem_create(&hc_mem, CONFIG_HISTORY_CACHE_SIZE, "history cache",
 			"HistoryCacheSize", 1, error)))
 	{
@@ -3532,13 +3550,16 @@ int	init_database_cache(char **error)
 	ids = (ZBX_DC_IDS *)__hc_index_mem_malloc_func(NULL, sizeof(ZBX_DC_IDS));
 	memset(ids, 0, sizeof(ZBX_DC_IDS));
 
-	zbx_hashset_create_ext(&cache->history_items, ZBX_HC_ITEMS_INIT_SIZE,
+	for ( i=0 ; i< ZBX_HISTORY_CACHES; i++) 
+	{
+		zbx_hashset_create_ext(&cache->history_items[i], ZBX_HC_ITEMS_INIT_SIZE,
 			ZBX_DEFAULT_UINT64_HASH_FUNC, ZBX_DEFAULT_UINT64_COMPARE_FUNC, NULL,
 			__hc_index_mem_malloc_func, __hc_index_mem_realloc_func, __hc_index_mem_free_func);
-
-	zbx_binary_heap_create_ext(&cache->history_queue, hc_queue_elem_compare_func, ZBX_BINARY_HEAP_OPTION_EMPTY,
+	
+		zbx_binary_heap_create_ext(&cache->history_queue[i], hc_queue_elem_compare_func, ZBX_BINARY_HEAP_OPTION_EMPTY,
 			__hc_index_mem_malloc_func, __hc_index_mem_realloc_func, __hc_index_mem_free_func);
-
+		cache->history_num[i]=0;
+	}
 	if (0 != (program_type & ZBX_PROGRAM_TYPE_SERVER))
 	{
 		if (SUCCEED != (ret = init_trend_cache(error)))
@@ -3564,11 +3585,13 @@ out:
  ******************************************************************************/
 static void	DCsync_all(void)
 {
-	int	sync_num;
+	int	sync_num,i;
 
 	zabbix_log(LOG_LEVEL_DEBUG, "In DCsync_all()");
+	for (i=0; i<ZBX_HISTORY_CACHES; i++) {
+		DCsync_history(ZBX_SYNC_FULL, &sync_num, i );
+	}
 
-	DCsync_history(ZBX_SYNC_FULL, &sync_num);
 	if (0 != (program_type & ZBX_PROGRAM_TYPE_SERVER))
 		DCsync_trends();
 

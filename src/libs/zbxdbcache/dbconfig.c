@@ -92,7 +92,7 @@ void DC_global_cfg_lock()
 		zbx_mutex_lock(&mutex_num);
 	}
 
-	zabbix_log(LOG_LEVEL_INFORMATION, "GLOBALY LOCKED, sync is %d locked ",sync_in_progress);
+//	zabbix_log(LOG_LEVEL_INFORMATION, "GLOBALY LOCKED, sync is %d locked ",sync_in_progress);
 //	globaly_locked_to_process=pid;
 }
 
@@ -109,7 +109,7 @@ void DC_global_cfg_unlock()
 		zbx_mutex_unlock(&mutex_num);
 //		zabbix_log(LOG_LEVEL_INFORMATION, "GLOBAL LOCK UNLOCKING mutex %d",mutex_num);
 	}
-	zabbix_log(LOG_LEVEL_INFORMATION, "GLOBALY UNLOCKED sync is %d",sync_in_progress);
+//	zabbix_log(LOG_LEVEL_INFORMATION, "GLOBALY UNLOCKED sync is %d",sync_in_progress);
 
 }
 
@@ -4591,6 +4591,7 @@ void	DCsync_configuration(unsigned char mode)
 	sec = zbx_time();
 	/* relies on hosts, proxies and interfaces, must be after DCsync_{hosts,interfaces}() */
 	DCsync_items(&items_sync, flags);
+
 	isec2 = zbx_time() - sec;
 
 	sec = zbx_time();
@@ -6279,7 +6280,7 @@ void	DCconfig_get_preprocessable_items(zbx_hashset_t *items, int *timestamp)
 	zbx_preproc_op_t		*op;
 	int				i;
 
-	zabbix_log(LOG_LEVEL_DEBUG, "In %s()", __function_name);
+	zabbix_log(LOG_LEVEL_INFORMATION, "In %s()", __function_name);
 
 	/* no changes */
 	if (0 != *timestamp && *timestamp == config->item_sync_ts)
@@ -6344,7 +6345,7 @@ void	DCconfig_get_preprocessable_items(zbx_hashset_t *items, int *timestamp)
 
 	UNLOCK_CACHE;
 out:
-	zabbix_log(LOG_LEVEL_DEBUG, "End of %s() items:%d", __function_name, items->num_data);
+	zabbix_log(LOG_LEVEL_INFORMATION, "End of %s() items:%d", __function_name, items->num_data);
 }
 
 void	DCconfig_get_hosts_by_itemids(DC_HOST *hosts, const zbx_uint64_t *itemids, int *errcodes, size_t num)

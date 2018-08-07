@@ -32,6 +32,7 @@
 #include "preproc_manager.h"
 #include "linked_list.h"
 
+
 extern unsigned char	process_type, program_type;
 extern int		server_num, process_num, CONFIG_PREPROCESSOR_FORKS;
 
@@ -707,7 +708,7 @@ static void	preprocessor_add_request(zbx_preprocessing_manager_t *manager, zbx_i
 
 	zabbix_log(LOG_LEVEL_DEBUG, "In %s()", __function_name);
 
-	preprocessor_sync_configuration(manager);
+//	preprocessor_sync_configuration(manager);
 
 	while (offset < message->size)
 	{
@@ -1078,20 +1079,28 @@ ZBX_THREAD_ENTRY(preprocessing_manager_thread, args)
 			time_stat = time_now;
 			time_idle = 0;
 			manager.processed_num = 0;
+			preprocessor_sync_configuration(&manager);
 		}
 
 		update_selfmon_counter(ZBX_PROCESS_STATE_IDLE);
 //		ret = zbx_ipc_service_recv(&service_results, ZBX_PREPROCESSING_MANAGER_DELAY, &client, &message);
 
 
-		if (manager.queued_num > ZBX_PREPROCESSING_MAX_QUEUE_TRESHOLD ) {
+		if (manager.queued_num > ZBX_PREPROCESSING_MAX_QUEUE_TRESHOLD ) 
+		{
 			ret = zbx_ipc_service_recv(&service_results,0, &client, &message);
 			preprocessor_assign_tasks(&manager);
 			preprocessing_flush_queue(&manager);
-		} else {
+		} else 
+		{
 			ret = zbx_ipc_service_recv(&service_results, 0, &client, &message);
 			if (NULL==message)
 				ret = zbx_ipc_service_recv(&service_requests, 0, &client, &message);
+//			else 
+//			{
+//				preprocessor_assign_tasks(&manager);
+//				preprocessing_flush_queue(&manager);
+//			}
 		}
 
 		update_selfmon_counter(ZBX_PROCESS_STATE_BUSY);
@@ -1151,7 +1160,7 @@ ZBX_THREAD_ENTRY(preprocessing_manager_thread, args)
 
 		if (0 == manager.preproc_num || 1 < time_now - time_flush)
 		{
-			dc_flush_history();
+			dc_flush_history(process_num);
 			time_flush = time_now;
 		}
 	}
