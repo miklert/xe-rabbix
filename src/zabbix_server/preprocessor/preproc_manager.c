@@ -421,7 +421,7 @@ static void	preprocessing_flush_queue(zbx_preprocessing_manager_t *manager)
 
 		preprocessor_flush_value(&request->value);
 		preprocessor_free_request(request);
-
+ 
 		if (SUCCEED == zbx_list_iterator_equal(&iterator, &manager->priority_tail))
 			zbx_list_iterator_clear(&manager->priority_tail);
 
@@ -1160,7 +1160,7 @@ ZBX_THREAD_ENTRY(preprocessing_manager_thread, args)
 
 		if (0 == manager.preproc_num || 1 < time_now - time_flush)
 		{
-			dc_flush_history(process_num);
+			dc_flush_history();
 			time_flush = time_now;
 		}
 	}

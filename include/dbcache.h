@@ -519,8 +519,11 @@ int	in_maintenance_without_data_collection(unsigned char maintenance_status, uns
 		unsigned char type);
 void	dc_add_history(zbx_uint64_t itemid, unsigned char item_value_type, unsigned char item_flags,
 		AGENT_RESULT *result, const zbx_timespec_t *ts, unsigned char state, const char *error);
-void	dc_flush_history( unsigned int procnum);
-int	DCsync_history(int sync_type, int *sync_num, unsigned int procnum);
+//		AGENT_RESULT *result, const zbx_timespec_t *ts, unsigned char state, const char *error, unsigned int procnum);
+void	dc_flush_history(void);
+//void	dc_flush_history( unsigned int procnum);
+//int	DCsync_history(int sync_type, int *sync_num, unsigned int procnum);
+int	DCsync_history(int sync_type, int *sync_num);
 int	init_database_cache(char **error);
 void	free_database_cache(void);
 

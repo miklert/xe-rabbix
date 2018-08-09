@@ -74,9 +74,12 @@ ZBX_THREAD_ENTRY(dbsyncer_thread, args)
 		}
 
 		sec = zbx_time();
-		for (i=0; i<4; i++) 
-			next_sync = DCsync_history(ZBX_SYNC_PARTIAL, &sync_num,i);
+		//for (i=0; i<4; i++) 
+		//{
+		next_sync = DCsync_history(ZBX_SYNC_PARTIAL, &sync_num);
 		num += sync_num;
+		//}
+
 		total_sec += zbx_time() - sec;
 
 		sleeptime = 0 < next_sync ? 0 : CONFIG_HISTSYNCER_FREQUENCY;

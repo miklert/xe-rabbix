@@ -92,7 +92,10 @@ void DC_global_cfg_lock()
 		zbx_mutex_lock(&mutex_num);
 	}
 
-//	zabbix_log(LOG_LEVEL_INFORMATION, "GLOBALY LOCKED, sync is %d locked ",sync_in_progress);
+//	for (mutex_num=ZBX_MUTEX_HISTORY_BASE; mutex_num<ZBX_MUTEX_HISTORY_BASE+4;mutex_num++) {
+//		zbx_mutex_lock(&mutex_num);
+//	}
+//	zabbix_log(LOG_LEVEL_INFORMATION, "GLOBALY LOCKED");
 //	globaly_locked_to_process=pid;
 }
 
@@ -109,7 +112,12 @@ void DC_global_cfg_unlock()
 		zbx_mutex_unlock(&mutex_num);
 //		zabbix_log(LOG_LEVEL_INFORMATION, "GLOBAL LOCK UNLOCKING mutex %d",mutex_num);
 	}
-//	zabbix_log(LOG_LEVEL_INFORMATION, "GLOBALY UNLOCKED sync is %d",sync_in_progress);
+//	for (mutex_num=ZBX_MUTEX_HISTORY_BASE; mutex_num<ZBX_MUTEX_HISTORY_BASE+4;mutex_num++) {
+//		zbx_mutex_unlock(&mutex_num);
+//		zabbix_log(LOG_LEVEL_INFORMATION, "GLOBAL LOCK UNLOCKING mutex %d",mutex_num);
+//	}
+
+//	zabbix_log(LOG_LEVEL_INFORMATION, "GLOBALY UNLOCKED");
 
 }
 
